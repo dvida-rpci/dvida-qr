@@ -721,7 +721,8 @@ body.lightbox-open { overflow: hidden; }
     .search-modal-head { padding: 10px 12px; }
     .search-input { font-size: 16px; }  /* evita zoom de iOS */
 
-    .gallery-btn { width: 100%; justify-content: center; padding: 12px; font-size: 15px; }
+    .gallery-btn { width: 100%; justify-content: center; padding: 12px; font-size: 15px; gap: 8px; }
+    .gallery-btn-thumb { width: 18px; height: 18px; border-radius: 3px; }
     .lightbox-prev,
     .lightbox-next { width: 44px; height: 44px; font-size: 32px; }
     .lightbox-prev { left: 8px; }
