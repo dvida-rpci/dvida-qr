@@ -5,7 +5,9 @@
     "python.formatting.provider": "black",
     "python.analysis.typeCheckingMode": "basic",
     "editor.formatOnSave": true,
-    "editor.rulers": [88],
+    "editor.rulers": [
+        88
+    ],
     "files.exclude": {
         "**/__pycache__": true,
         "**/*.pyc": true,
@@ -20,7 +22,7 @@
     "terminal.integrated.defaultProfile.linux": "bash",
     "python.terminal.activateEnvironment": true,
     "python.analysis.autoImportCompletions": true,
-    "editor.minimap.enabled": true,
+    "editor.minimap.enabled": false,
     "workbench.colorCustomizations": {
         "terminal.background": "#1E1E1E",
         "terminal.foreground": "#CCCCCC"

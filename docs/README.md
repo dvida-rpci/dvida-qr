@@ -14,6 +14,6 @@ URL final: `https://<usuario>.github.io/qr-groupe-seb/`
 
 ## Migración
 
-- **Fecha:** 2026-05-21 14:28:35
+- **Fecha:** 2026-05-21 15:16:21
 - **Páginas:** 62
 - **Categorías:** 3
