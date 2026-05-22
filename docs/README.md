@@ -1,19 +1,9 @@
 # QR Groupe SEB
 
-Sitio migrado automáticamente desde: https://sites.google.com/view/qr-groupe-seb
+Sitio generado automáticamente desde `plantilla_sitio.xlsx`.
 
-## Deploy a GitHub Pages
+- **Fecha:** 2026-05-22 10:17:30
+- **TAGs publicados:** 40
+- **Categorías:** EQUIPOS, TANQUES
 
-```bash
-git init && git add . && git commit -m "Initial commit"
-gh repo create qr-groupe-seb --public --source=. --remote=origin --push
-# Luego en GitHub: Settings → Pages → Source: main / (root)
-```
-
-URL final: `https://<usuario>.github.io/qr-groupe-seb/`
-
-## Migración
-
-- **Fecha:** 2026-05-21 15:16:21
-- **Páginas:** 62
-- **Categorías:** 3
+URL pública: https://jagilren.github.io/groupe_seb_qr/

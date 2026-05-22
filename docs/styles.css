@@ -204,24 +204,6 @@ body {
 .breadcrumb a:hover { text-decoration: underline; }
 .breadcrumb span { color: var(--text); }
 
-.info-section {
-    background: var(--bg-alt);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    margin-bottom: 16px;
-}
-.info-section h2 {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 8px;
-}
-.info-section p { font-size: 15px; color: var(--text); margin-bottom: 4px; }
-.info-section .empty { color: var(--text-muted); font-style: italic; }
-
 .external-links {
     margin-top: 32px;
     padding-top: 24px;
@@ -424,10 +406,6 @@ body {
     .page-header .subtitle { font-size: 15px; }
 
     .breadcrumb { font-size: 14px; margin-top: 4px; }
-
-    .info-section { padding: 14px 16px; margin-bottom: 10px; }
-    .info-section h2 { font-size: 12px; }
-    .info-section p { font-size: 15px; }
 
     .accordion { gap: 6px; margin-top: 12px; }
     .acc-header { padding: 14px 14px; min-height: 56px; }
