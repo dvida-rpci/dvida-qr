@@ -27,6 +27,14 @@ from openpyxl import load_workbook
 REPO_ROOT = Path(__file__).parent
 DEFAULT_INPUT = REPO_ROOT / "plantilla_sitio.xlsx"
 DEFAULT_OUTPUT = REPO_ROOT / "docs"
+TAG_RESOURCES_PATH = REPO_ROOT / "TAG_RESOURCES.xlsx"
+
+# Recursos por TAG (TAG_RESOURCES.xlsx) — pares (columna, label visible en botón)
+TAG_RESOURCES_COLUMNS = [
+    ("Specifications", "Especificaciones"),
+    ("Handbook_Manual", "Manual"),
+    ("Maintenance", "Mantenimiento"),
+]
 
 SITE_TITLE = "QR Groupe SEB"
 SITE_SUBTITLE = "Documentación técnica"
@@ -67,6 +75,7 @@ class Item:
     ficha_tecnica_url: Optional[str] = None
     curva_url: Optional[str] = None
     images: list[str] = field(default_factory=list)  # nombres de archivo (1.png, 2.jpeg…)
+    resources: dict[str, str] = field(default_factory=dict)  # {col_name: url} desde TAG_RESOURCES.xlsx
 
     @property
     def slug(self) -> str:
@@ -101,6 +110,46 @@ def cell_hyperlink(cell) -> Optional[str]:
     if v.startswith(("http://", "https://")):
         return v
     return None
+
+
+def load_tag_resources(xlsx_path: Path) -> dict[str, dict[str, str]]:
+    """Lee TAG_RESOURCES.xlsx → {TAG_ID: {col_name: url}}.
+
+    Si el archivo no existe, devuelve {} (los botones simplemente no se renderizan).
+    """
+    if not xlsx_path.exists():
+        print(f"   ℹ️  Sin TAG_RESOURCES.xlsx (no se renderizan botones de recursos)")
+        return {}
+
+    print(f"📖 Leyendo recursos: {xlsx_path}")
+    wb = load_workbook(xlsx_path, data_only=True)
+    ws = wb["TAG_RESOURCES"] if "TAG_RESOURCES" in wb.sheetnames else wb.active
+
+    headers = [cell_value(c) for c in ws[1]]
+    if not headers or headers[0] != "TAG_ID":
+        raise ValueError(f"TAG_RESOURCES.xlsx: primera columna debe ser 'TAG_ID', es {headers[0]!r}")
+
+    # Solo tomamos las columnas configuradas en TAG_RESOURCES_COLUMNS que existan
+    col_idx = {}
+    for col_name, _label in TAG_RESOURCES_COLUMNS:
+        if col_name in headers:
+            col_idx[col_name] = headers.index(col_name)
+
+    resources: dict[str, dict[str, str]] = {}
+    for row in ws.iter_rows(min_row=2):
+        tag = cell_value(row[0])
+        if not tag:
+            continue
+        per_tag: dict[str, str] = {}
+        for col_name, idx in col_idx.items():
+            url = cell_hyperlink(row[idx])
+            if url:
+                per_tag[col_name] = url
+        if per_tag:
+            resources[tag] = per_tag
+
+    print(f"   🔗 {len(resources)} TAGs con recursos cargados ({sum(len(v) for v in resources.values())} enlaces)")
+    return resources
 
 
 def load_items(xlsx_path: Path) -> tuple[list[Item], list[str]]:
@@ -172,6 +221,12 @@ def load_items(xlsx_path: Path) -> tuple[list[Item], list[str]]:
         print(f"   📷 {with_imgs} TAGs con imágenes cargadas del manifest")
     else:
         print(f"   ℹ️  Sin manifest de imágenes (corre convert_fichas_to_template.py primero si las quieres)")
+
+    # Cargar recursos por TAG (Specifications / Handbook_Manual / Maintenance)
+    resources_by_tag = load_tag_resources(TAG_RESOURCES_PATH)
+    for it in items:
+        if it.tag in resources_by_tag:
+            it.resources = resources_by_tag[it.tag]
 
     print(f"   {len(items)} TAGs cargados, {len(prop_columns)} propiedades posibles")
     return items, prop_columns
@@ -428,8 +483,13 @@ def render_item_page(item: Item) -> str:
     else:
         parts.append('<p class="empty">Esta ficha no tiene propiedades cargadas.</p>')
 
-    # Documentos y enlaces
-    if item.ficha_tecnica_url or item.curva_url:
+    # Documentos y enlaces (Ficha Técnica/Curva de plantilla + recursos de TAG_RESOURCES)
+    resource_links = [
+        (label, item.resources[col])
+        for col, label in TAG_RESOURCES_COLUMNS
+        if item.resources.get(col)
+    ]
+    if item.ficha_tecnica_url or item.curva_url or resource_links:
         parts.append('<section class="external-links">')
         parts.append('<h2>Documentos y enlaces</h2>')
         parts.append('<ul class="link-list">')
@@ -442,6 +502,11 @@ def render_item_page(item: Item) -> str:
             parts.append(
                 f'<li><a class="link-btn" href="{h(item.curva_url)}" '
                 f'target="_blank" rel="noopener">Curva ↗</a></li>'
+            )
+        for label, url in resource_links:
+            parts.append(
+                f'<li><a class="link-btn" href="{h(url)}" '
+                f'target="_blank" rel="noopener">{h(label)} ↗</a></li>'
             )
         parts.append('</ul></section>')
 
@@ -1657,6 +1722,7 @@ def generate_site(items: list[Item], output_dir: Path):
                 "properties": i.properties,
                 "ficha_tecnica_url": i.ficha_tecnica_url,
                 "curva_url": i.curva_url,
+                "resources": i.resources,
             }
             for i in items
         ],
