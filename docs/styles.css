@@ -89,6 +89,27 @@ body {
 }
 .menu-toggle:hover { background: rgba(255,255,255,0.15); }
 
+/* Botón Home (icono casita; visible en desktop y mobile) */
+.home-btn {
+    background: transparent;
+    border: 0;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+    border-radius: var(--radius);
+    color: var(--banner-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    text-decoration: none;
+}
+.home-btn:hover { background: rgba(255,255,255,0.15); }
+.home-btn:focus-visible {
+    outline: 2px solid var(--banner-text);
+    outline-offset: 2px;
+}
+
 /* ---------------- Search button + modal ---------------- */
 .search-toggle {
     background: transparent;
