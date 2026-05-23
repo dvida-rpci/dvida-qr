@@ -52,9 +52,11 @@ body {
     flex-shrink: 0;
     text-decoration: none;
 }
-.banner-logo-svg {
+.banner-logo-img {
     height: 48px;
     width: auto;
+    max-width: 160px;
+    object-fit: contain;
     display: block;
 }
 .banner-title {
@@ -709,7 +711,7 @@ body.lightbox-open { overflow: hidden; }
         padding: 0 10px;
         gap: 8px;
     }
-    .banner-logo-svg { height: 36px; }
+    .banner-logo-img { height: 36px; }
     .banner-title { font-size: 15px; font-weight: 700; }
     .banner-title-full { display: none; }
     .banner-title-short { display: inline; }
@@ -781,7 +783,7 @@ body.lightbox-open { overflow: hidden; }
 @media (max-width: 480px) {
     .banner-title { display: none; }
     .banner { justify-content: space-between; }
-    .banner-logo-svg { height: 32px; }
+    .banner-logo-img { height: 32px; }
 }
 
 @media (max-width: 380px) {
