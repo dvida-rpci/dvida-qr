@@ -65,6 +65,7 @@ BANNER_TITLE_SHORT = "PTAR STARnD"
 # Logos del banner — paths relativos a docs/ (overrideable vía site_config.json -> "logos")
 LOGO_LEFT_PATH = "assets/logos/LogoRPCI.png"
 LOGO_LEFT_ALT = "RPCI — Red Proyectos con Ingeniería"
+LOGO_LEFT_HREF = "https://rpci.com.co"  # URL externa del logo izquierdo
 LOGO_RIGHT_PATH = "assets/logos/LogoCliente.png"
 LOGO_RIGHT_ALT = "Cliente"
 
@@ -163,6 +164,7 @@ def load_site_config(path: Path) -> dict:
         "logos": {
             "left": LOGO_LEFT_PATH,
             "left_alt": LOGO_LEFT_ALT,
+            "left_href": LOGO_LEFT_HREF,
             "right": LOGO_RIGHT_PATH,
             "right_alt": LOGO_RIGHT_ALT,
         },
@@ -387,7 +389,13 @@ def page_skeleton(
     <div class="sidebar-backdrop" aria-hidden="true"></div>
     <header class="banner">
         <button class="menu-toggle" aria-label="Abrir menú" aria-controls="sidebar" aria-expanded="false">☰</button>
-        <a class="banner-logo banner-logo-left" href="{rel_prefix}index.html" aria-label="Inicio">
+        <a class="home-btn" href="{rel_prefix}index.html" aria-label="Inicio">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 10.5L12 3l9 7.5"/>
+                <path d="M5 9.5V21h5v-6h4v6h5V9.5"/>
+            </svg>
+        </a>
+        <a class="banner-logo banner-logo-left" href="{h(LOGO_LEFT_HREF)}" target="_blank" rel="noopener" aria-label="{h(LOGO_LEFT_ALT)}">
             {render_logo(rel_prefix, LOGO_LEFT_PATH, LOGO_LEFT_ALT)}
         </a>
         <h1 class="banner-title">
@@ -696,6 +704,27 @@ body {
     flex-shrink: 0;
 }
 .menu-toggle:hover { background: rgba(255,255,255,0.15); }
+
+/* Botón Home (icono casita; visible en desktop y mobile) */
+.home-btn {
+    background: transparent;
+    border: 0;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+    border-radius: var(--radius);
+    color: var(--banner-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    text-decoration: none;
+}
+.home-btn:hover { background: rgba(255,255,255,0.15); }
+.home-btn:focus-visible {
+    outline: 2px solid var(--banner-text);
+    outline-offset: 2px;
+}
 
 /* ---------------- Search button + modal ---------------- */
 .search-toggle {
@@ -1899,7 +1928,7 @@ def main():
     # Cargar config y aplicar overrides de título/URL/color/logos a los globals
     config = load_site_config(SITE_CONFIG_PATH)
     global SITE_TITLE, BANNER_TITLE_FULL, BANNER_TITLE_SHORT, SITE_URL, _MOBILE_THEME_COLOR
-    global LOGO_LEFT_PATH, LOGO_LEFT_ALT, LOGO_RIGHT_PATH, LOGO_RIGHT_ALT
+    global LOGO_LEFT_PATH, LOGO_LEFT_ALT, LOGO_LEFT_HREF, LOGO_RIGHT_PATH, LOGO_RIGHT_ALT
     SITE_TITLE = config["site_title"]
     BANNER_TITLE_FULL = config["banner_title_full"]
     BANNER_TITLE_SHORT = config["banner_title_short"]
@@ -1907,6 +1936,7 @@ def main():
     _MOBILE_THEME_COLOR = config["theme"].get("accent", _MOBILE_THEME_COLOR)
     LOGO_LEFT_PATH = config["logos"]["left"]
     LOGO_LEFT_ALT = config["logos"]["left_alt"]
+    LOGO_LEFT_HREF = config["logos"]["left_href"]
     LOGO_RIGHT_PATH = config["logos"]["right"]
     LOGO_RIGHT_ALT = config["logos"]["right_alt"]
 
