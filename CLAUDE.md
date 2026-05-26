@@ -135,7 +135,7 @@ Bajo `<output_dir>/`:
 | `index.html`, `<cat>/index.html`, `<cat>/<tag>.html` | Páginas |
 | `styles.css`, `script.js` | Assets embebidos en el migrator |
 | `search-index.json` + `search-index.js` | Mismo contenido; `.js` lo carga el HTML vía `<script>` (file://-safe), `.json` queda para consumo externo |
-| `urls.txt` | Listado plano `CATEGORIA_SINGULAR,URL` — una línea por TAG. Categorías en singular: `EQUIPO`, `INSTRUMENTO`, `TANQUE`. URL absoluta usando `site_url`. Útil para generar QR/stickers o auditar enlaces |
+| `urls.txt` | Listado plano `CATEGORIA_SINGULAR,URL` — una línea por TAG. Categorías en singular: `EQUIPO`, `INSTRUMENTO`, `TANQUE`. **Base URL derivada del `git remote origin`** (no hardcoded): `https://<owner>.github.io/<repo>/`. Si no hay git, cae al `site_url` del config. Esto garantiza que los QRs apunten al destino real del push aunque cambies de repo. Útil para generar stickers QR o auditar enlaces |
 | `migration_metadata.json` | Trazabilidad (timestamp, conteos, datos por TAG) |
 | `README.md` | Pie de información del deploy |
 | `.nojekyll` | Desactiva Jekyll en GitHub Pages |
@@ -161,6 +161,7 @@ Bajo `<output_dir>/`:
 - **Cleanup whitelist en vez de "borra todo excepto assets/".** El enfoque viejo (skip-by-name) wipeaba contenido foráneo si el destino apuntaba a un subdir tipo `docs/assets/images`: ninguna subcarpeta se llamaba `assets`, así que iban todas al `rmtree`. La whitelist solo borra los archivos generados conocidos + subcarpetas de categoría.
 - **`extract_pairs` con "last value, scan left for label" (mayo 2026).** El enfoque viejo (label + value en celdas adyacentes ≤3 cols) fallaba en layouts con gap mayor (NI00011 tiene gap de 5). El nuevo es layout-agnóstico. Tradeoff: solo captura una pareja por fila, pero los xlsx industriales observados siempre tienen una pareja por fila.
 - **Switch "Forzar regeneración" NO borra archivos.** El usuario clarificó que "regenerar plantilla" significa re-poblar contenido vía `convert_fichas`, no `unlink()`. La estructura columnar pivotal se preserva automáticamente porque convert_fichas reescribe el xlsx con el mismo esqueleto.
+- **`urls.txt` deriva la base URL del git remote, no del config.** Los QRs físicos deben apuntar al repo real al que se está pusheando. Si cambiás de `jagilren/groupe_seb_qr` a `dvida-rpci/dvida-qr`, las URLs se ajustan solas en la próxima corrida. `site_url` del config sigue gobernando el banner/metadata/README pero NO `urls.txt`.
 
 ## Limitaciones
 

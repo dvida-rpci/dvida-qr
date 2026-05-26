@@ -56,7 +56,41 @@ TAG_RESOURCES_COLUMNS = [
 
 SITE_TITLE = "QR Groupe SEB"
 SITE_SUBTITLE = "Documentación técnica"
-SITE_URL = "https://jagilren.github.io/groupe_seb_qr/"
+SITE_URL = "https://jagilren.github.io/groupe_seb_qr/"  # fallback solo si no hay git remote
+
+
+def infer_github_pages_url() -> Optional[str]:
+    """Deriva la URL de GitHub Pages desde el `git remote origin`.
+
+    Soporta los dos formatos comunes:
+        https://github.com/owner/repo.git    → https://owner.github.io/repo/
+        git@github.com:owner/repo.git        → https://owner.github.io/repo/
+
+    Devuelve None si:
+      - git no está disponible
+      - el cwd no es un repo
+      - el remote 'origin' no apunta a github.com
+    """
+    import subprocess, re
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=2,
+            cwd=str(REPO_ROOT),
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    url = result.stdout.strip()
+    m = re.match(
+        r"(?:https://github\.com/|git@github\.com:)([^/]+)/([^/]+?)(?:\.git)?/?$",
+        url,
+    )
+    if not m:
+        return None
+    owner, repo = m.group(1), m.group(2)
+    return f"https://{owner}.github.io/{repo}/"
 
 # Banner: título centrado entre los dos logos
 BANNER_TITLE_FULL = "Documentación Técnica — PTAR STARnD"
@@ -162,11 +196,20 @@ def load_site_config(path: Path) -> dict:
       "theme": { ...DEFAULT_THEME keys... }
     }
     """
+    # Precedencia para site_url:
+    #   1. site_config.json -> "site_url" (explícito; gana siempre, p.ej. custom domain)
+    #   2. git remote origin → GitHub Pages URL derivada
+    #   3. SITE_URL hardcoded (último recurso)
+    inferred = infer_github_pages_url()
+    default_site_url = inferred or SITE_URL
+    if inferred:
+        print(f"   🌐 site_url derivada del git remote: {inferred}")
+
     cfg = {
         "site_title": SITE_TITLE,
         "banner_title_full": BANNER_TITLE_FULL,
         "banner_title_short": BANNER_TITLE_SHORT,
-        "site_url": SITE_URL,
+        "site_url": default_site_url,
         "theme": dict(DEFAULT_THEME),
         "logos": {
             "left": LOGO_LEFT_PATH,
@@ -1943,13 +1986,19 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
         f"window.__SEARCH_INDEX__ = {index_json};", encoding="utf-8"
     )
 
-    # Listado plano "CATEGORIA_SINGULAR,URL" — uno por subpage (TAG)
-    base_url = SITE_URL.rstrip("/")
+    # Listado plano "CATEGORIA_SINGULAR,URL" — uno por subpage (TAG).
+    # CRÍTICO: urls.txt es lo que se imprime en los stickers QR pegados a
+    # los equipos. DEBE apuntar al destino real del push, NO a un URL hardcoded
+    # del site_config.json. Por eso siempre intentamos derivar del git remote
+    # primero. Fallback al config solo si git no está disponible (repo huérfano).
+    base_url_for_qr = (infer_github_pages_url() or SITE_URL).rstrip("/")
+    if base_url_for_qr != SITE_URL.rstrip("/"):
+        print(f"   🔗 urls.txt usa base derivada del git remote: {base_url_for_qr}")
     url_lines = []
     for cat in CATEGORY_ORDER:
         for it in grouped.get(cat, []):
             cat_single = CATEGORY_SINGULAR.get(it.category, it.category)
-            url = f"{base_url}/{it.category.lower()}/{it.filename}"
+            url = f"{base_url_for_qr}/{it.category.lower()}/{it.filename}"
             url_lines.append(f"{cat_single},{url}")
     (output_dir / "urls.txt").write_text("\n".join(url_lines) + "\n", encoding="utf-8")
 
