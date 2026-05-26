@@ -6,4 +6,4 @@ Sitio generado automáticamente desde `plantilla_sitio.xlsx`.
 - **TAGs publicados:** 42
 - **Categorías:** EQUIPOS, INSTRUMENTOS, TANQUES
 
-URL pública: https://jagilren.github.io/groupe_seb_qr/
+URL pública: https://<owner>.github.io/<repo_name>/

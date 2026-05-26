@@ -8,13 +8,13 @@ Generador de sitio estático desde Excel para fichas técnicas industriales, pub
 
 - **Input:** xlsx con fichas técnicas del cliente (una hoja por TAG). Ejemplos usados: `NP00033 Fichas Técnicas...xlsx` (proyecto PTAR STARnD), `NI00011 Fichas Técnicas_Equipos STARnD GROUP SEB V3.xlsx`.
 - **Output:** carpeta destino (default `docs/`) con HTML/CSS/JS vainilla.
-- **Live:** https://jagilren.github.io/groupe_seb_qr/
+- **Live:** https://<username>.github.io/<repo_name>>/
 
 ## Config
 
 | Item         | Valor                                                   |
 | ------------ | ------------------------------------------------------- |
-| Remote       | `https://github.com/jagilren/groupe_seb_qr`             |
+| Remote       | `https://github.com/<username>>/<repo_name>>`           |
 | Branch       | `master`                                                |
 | Pages serves | `/docs`                                                 |
 | Stack        | Python 3.12 + openpyxl + nicegui (WSL Ubuntu 24)        |
@@ -47,7 +47,7 @@ Permite configurar:
 - **📁 Carpeta destino** (default `docs/`, editable).
 - **🖼️ Logo del cliente** (drag-and-drop, sobrescribe `<dest>/assets/logos/LogoCliente.png`).
 - **🔗 Enlace del logo del cliente** (`logos.right_href`) — URL externa que abre en pestaña nueva al clickear el logo del cliente. Vacío → logo no clickeable (se renderiza como `<div>` en vez de `<a>`).
-- **📝 Título del sitio** (`site_title`) — reemplaza el texto por defecto "QR Groupe SEB".
+- **📝 Título del sitio** (`site_title`) — reemplaza el texto por defecto "QR PTAR".
 - **🎨 Color del tema** (color picker → deriva paleta completa de 10 vars + actualiza swatches de preview en vivo).
 - **📄 Archivo de fichas técnicas xlsx** (opcional; se guarda como `fichas_source.xlsx` en raíz).
 - **📄 TAG_RESOURCES.xlsx** (opcional; sobrescribe el existente).
@@ -120,10 +120,10 @@ Archivo opcional en la raíz; sobrescribe defaults sin tocar Python. Schema:
 
 ```json
 {
-  "site_title": "QR Groupe SEB",
+  "site_title": "QR  PTAR INDUSTRIAL",
   "banner_title_full": "Documentación Técnica — PTAR STARnD",
   "banner_title_short": "PTAR STARnD",
-  "site_url": "https://jagilren.github.io/groupe_seb_qr/",
+  "site_url": "https://<username>.github.io/<repo_name>/",
   "theme": {
     "accent": "#7c3aed", "accent_hover": "#5f14df",
     "banner_gradient": "linear-gradient(135deg, #c9aef7 0%, #7c3aed 60%, #6315e8 100%)",

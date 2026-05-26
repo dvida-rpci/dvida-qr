@@ -1,6 +1,6 @@
 ═══════════════════════════════════════════════════════════════════════
   INSTALACIÓN EN UN LAPTOP NUEVO (sin VSCode)
-  Aplicativo QR Groupe SEB — generador de sitio estático desde Excel
+  Aplicativo QR PTAR — generador de sitio estático desde Excel
 ═══════════════════════════════════════════════════════════════════════
 
 VSCode NO es necesario — es solo un editor. La aplicación es Python
