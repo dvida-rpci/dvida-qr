@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guía para Claude Code en este repositorio.
+Guía para Claude Code en este repositorio. RPCI
 
 ## Qué es
 
@@ -12,13 +12,13 @@ Generador de sitio estático desde Excel para fichas técnicas industriales, pub
 
 ## Config
 
-| Item | Valor |
-|---|---|
-| Remote | `https://github.com/jagilren/groupe_seb_qr` |
-| Branch | `master` |
-| Pages serves | `/docs` |
-| Stack | Python 3.12 + openpyxl + nicegui (WSL Ubuntu 24) |
-| Setup | `pip3 install --break-system-packages openpyxl nicegui` |
+| Item         | Valor                                                   |
+| ------------ | ------------------------------------------------------- |
+| Remote       | `https://github.com/jagilren/groupe_seb_qr`             |
+| Branch       | `master`                                                |
+| Pages serves | `/docs`                                                 |
+| Stack        | Python 3.12 + openpyxl + nicegui (WSL Ubuntu 24)        |
+| Setup        | `pip3 install --break-system-packages openpyxl nicegui` |
 
 **Crítico:** Pages sirve desde `/docs`, no desde la raíz. Solo lo que termina en `docs/` llega a producción. La GUI permite destinos arbitrarios para staging.
 
@@ -59,13 +59,13 @@ Acciones:
 
 ### Switch "🔄 Forzar regeneración" (default OFF)
 
-| Switch | Upload por widget | Comportamiento |
-|---|---|---|
-| OFF | No | Usa `plantilla_sitio.xlsx` tal cual está; no toca el contenido |
-| OFF | Sí | `convert_fichas` corre con el xlsx subido (sobrescribe plantilla) |
-| ON | No | **Auto-detecta** xlsx de fichas en raíz del repo (cualquier `*.xlsx` ≠ plantilla/TAG_RESOURCES) y usa el más reciente |
-| ON | Sí | `convert_fichas` corre con el xlsx subido |
-| ON | Ni upload ni xlsx en raíz | Aborta con error claro |
+| Switch | Upload por widget         | Comportamiento                                                                                                        |
+| ------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| OFF    | No                        | Usa `plantilla_sitio.xlsx` tal cual está; no toca el contenido                                                        |
+| OFF    | Sí                        | `convert_fichas` corre con el xlsx subido (sobrescribe plantilla)                                                     |
+| ON     | No                        | **Auto-detecta** xlsx de fichas en raíz del repo (cualquier `*.xlsx` ≠ plantilla/TAG_RESOURCES) y usa el más reciente |
+| ON     | Sí                        | `convert_fichas` corre con el xlsx subido                                                                             |
+| ON     | Ni upload ni xlsx en raíz | Aborta con error claro                                                                                                |
 
 **No borra archivos físicamente** — `convert_fichas` sobrescribe el contenido de plantilla y extrae imágenes nuevas (la estructura columnar pivotal se preserva).
 
@@ -78,16 +78,16 @@ Acciones:
 
 ## Mapping Excel → UI
 
-| Origen | Renderizado |
-|---|---|
-| `TAG` | slug URL + breadcrumb + parte del h1 |
-| `SERVICIO` (columna de propiedades) | parte del h1 y `<title>`: `<TAG> - <SERVICIO\|"no definido">` |
-| `Categoría` | carpeta `<output>/<cat>/<tag>.html` + grupo en nav |
-| `Título` | usado solo en el index de categoría (no en el h1 de la ficha) |
-| Otras columnas con valor | acordeón con label = h2 |
-| `Ficha Técnica`, `Curva` (plantilla) | botones en "Documentos y enlaces" (target=_blank) |
-| imágenes en `<output>/assets/images/<TAG>/` | botón "Ver N imágenes" con thumbnail (primera imagen) → lightbox. Fallback: `assets/icons/generic-image.svg` |
-| `TAG_RESOURCES.xlsx` (`Specifications`, `Handbook_Manual`, `Maintenance`) | botones "Especificaciones / Manual / Mantenimiento" en "Documentos y enlaces" |
+| Origen                                                                    | Renderizado                                                                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `TAG`                                                                     | slug URL + breadcrumb + parte del h1                                                                         |
+| `SERVICIO` (columna de propiedades)                                       | parte del h1 y `<title>`: `<TAG> - <SERVICIO\|"no definido">`                                                |
+| `Categoría`                                                               | carpeta `<output>/<cat>/<tag>.html` + grupo en nav                                                           |
+| `Título`                                                                  | usado solo en el index de categoría (no en el h1 de la ficha)                                                |
+| Otras columnas con valor                                                  | acordeón con label = h2                                                                                      |
+| `Ficha Técnica`, `Curva` (plantilla)                                      | botones en "Documentos y enlaces" (target=_blank)                                                            |
+| imágenes en `<output>/assets/images/<TAG>/`                               | botón "Ver N imágenes" con thumbnail (primera imagen) → lightbox. Fallback: `assets/icons/generic-image.svg` |
+| `TAG_RESOURCES.xlsx` (`Specifications`, `Handbook_Manual`, `Maintenance`) | botones "Especificaciones / Manual / Mantenimiento" en "Documentos y enlaces"                                |
 
 ## Convert fichas → plantilla (paso 1)
 
@@ -147,16 +147,16 @@ Archivo opcional en la raíz; sobrescribe defaults sin tocar Python. Schema:
 
 Bajo `<output_dir>/`:
 
-| Archivo | Contenido |
-|---|---|
-| `index.html`, `<cat>/index.html`, `<cat>/<tag>.html` | Páginas |
-| `styles.css`, `script.js` | Assets embebidos en el migrator |
-| `search-index.json` + `search-index.js` | Mismo contenido; `.js` lo carga el HTML vía `<script>` (file://-safe), `.json` queda para consumo externo |
-| `urls.txt` | Listado plano `CATEGORIA_SINGULAR,URL` — una línea por TAG. Categorías en singular: `EQUIPO`, `INSTRUMENTO`, `TANQUE`. **Base URL derivada del `git remote origin`** (no hardcoded): `https://<owner>.github.io/<repo>/`. Si no hay git, cae al `site_url` del config. Esto garantiza que los QRs apunten al destino real del push aunque cambies de repo. Útil para generar stickers QR o auditar enlaces |
-| `migration_metadata.json` | Trazabilidad (timestamp, conteos, datos por TAG) |
-| `README.md` | Pie de información del deploy |
-| `.nojekyll` | Desactiva Jekyll en GitHub Pages |
-| `assets/icons/generic-image.svg` | Fallback del thumbnail si la imagen del TAG no carga |
+| Archivo                                              | Contenido                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.html`, `<cat>/index.html`, `<cat>/<tag>.html` | Páginas                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `styles.css`, `script.js`                            | Assets embebidos en el migrator                                                                                                                                                                                                                                                                                                                                                                            |
+| `search-index.json` + `search-index.js`              | Mismo contenido; `.js` lo carga el HTML vía `<script>` (file://-safe), `.json` queda para consumo externo                                                                                                                                                                                                                                                                                                  |
+| `urls.txt`                                           | Listado plano `CATEGORIA_SINGULAR,URL` — una línea por TAG. Categorías en singular: `EQUIPO`, `INSTRUMENTO`, `TANQUE`. **Base URL derivada del `git remote origin`** (no hardcoded): `https://<owner>.github.io/<repo>/`. Si no hay git, cae al `site_url` del config. Esto garantiza que los QRs apunten al destino real del push aunque cambies de repo. Útil para generar stickers QR o auditar enlaces |
+| `migration_metadata.json`                            | Trazabilidad (timestamp, conteos, datos por TAG)                                                                                                                                                                                                                                                                                                                                                           |
+| `README.md`                                          | Pie de información del deploy                                                                                                                                                                                                                                                                                                                                                                              |
+| `.nojekyll`                                          | Desactiva Jekyll en GitHub Pages                                                                                                                                                                                                                                                                                                                                                                           |
+| `assets/icons/generic-image.svg`                     | Fallback del thumbnail si la imagen del TAG no carga                                                                                                                                                                                                                                                                                                                                                       |
 
 **Cleanup whitelist:** entre corridas el migrador solo borra los archivos de la tabla de arriba + las subcarpetas de categoría (`equipos/`, `instrumentos/`, `tanques/`). Cualquier otro archivo o carpeta en `output_dir` (incluido todo bajo `assets/`) se preserva. Aborta con error si el `output_dir` se llama `assets`/`images`/`logos`/`icons` o tiene `assets/` en su path (evita wipeos accidentales).
 
@@ -210,24 +210,24 @@ Bajo `<output_dir>/`:
 
 ## Estado de archivos
 
-| Archivo | Estado |
-|---|---|
-| [docs/](docs/) | ⚠️ Solo `assets/` actualmente (sitio HTML pendiente de regenerar tras el último `convert_fichas`) |
-| [convert_fichas_to_template.py](convert_fichas_to_template.py) | ✅ Paso 1 — refactor mayo 2026 (extracción layout-agnóstica + flag `--images-only`) |
-| [excel_migrator.py](excel_migrator.py) | ✅ Paso 4 — acepta `output_dir`, `ensure_images()` auto-recovery, cleanup defensivo |
-| [update_site_from_excel.sh](update_site_from_excel.sh) | ✅ Wrapper CLI |
-| [generate_excel_template.py](generate_excel_template.py) | ✅ Plantilla vacía desde sitio existente |
-| [generate_tag_resources_template.py](generate_tag_resources_template.py) | ✅ Bootstrap/merge de TAG_RESOURCES.xlsx |
-| [gui.py](gui.py) + [launch_gui.sh](launch_gui.sh) | ✅ GUI NiceGUI (puerto 8080) — input título sitio + input URL logo cliente + color picker live + switch "Forzar regeneración" + auto-detect de xlsx + uploads async |
-| [plantilla_sitio.xlsx](plantilla_sitio.xlsx) | ✅ Fuente de datos — última regeneración desde NI00011 (36 TAGs, 96 propiedades) |
-| [TAG_RESOURCES.xlsx](TAG_RESOURCES.xlsx) | ✅ Enlaces por TAG |
-| [site_config.json](site_config.json) | ✅ Tema editable vía GUI (color picker + título del sitio) |
-| [comandos.txt](comandos.txt) | ✅ Cheatsheet de comandos CLI por sección |
-| [New_Laptop.txt](New_Laptop.txt) | ✅ Guía de instalación en laptop nuevo (Linux/Windows/macOS/WSL sin VSCode) |
-| [windows_launchers/](windows_launchers/) | ✅ 4 `.bat` para Windows: lanzar (nativo/WSL), parar, instalar acceso directo + auto-arranque |
-| `NI00011 Fichas Técnicas_Equipos STARnD GROUP SEB V3.xlsx` | ✅ Source xlsx actual en raíz |
-| `docs/assets/images/` | ✅ 37 carpetas TAG con imágenes extraídas (filtro posición+frecuencia activo) |
-| `docs/assets/logos/LogoCliente.png` | ✅ Logo del cliente |
-| `docs/assets/logos/LogoRPCI.png` | ⚠️ Falta — el banner muestra hueco en posición izquierda hasta agregarlo |
-| `docs/assets/icons/generic-image.svg` | ✅ Fallback de thumbnail |
-| Hyperlinks de recursos | ⚠️ Llenado parcial — algunas celdas vacías |
+| Archivo                                                                  | Estado                                                                                                                                                             |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [docs/](docs/)                                                           | ⚠️ Solo `assets/` actualmente (sitio HTML pendiente de regenerar tras el último `convert_fichas`)                                                                   |
+| [convert_fichas_to_template.py](convert_fichas_to_template.py)           | ✅ Paso 1 — refactor mayo 2026 (extracción layout-agnóstica + flag `--images-only`)                                                                                 |
+| [excel_migrator.py](excel_migrator.py)                                   | ✅ Paso 4 — acepta `output_dir`, `ensure_images()` auto-recovery, cleanup defensivo                                                                                 |
+| [update_site_from_excel.sh](update_site_from_excel.sh)                   | ✅ Wrapper CLI                                                                                                                                                      |
+| [generate_excel_template.py](generate_excel_template.py)                 | ✅ Plantilla vacía desde sitio existente                                                                                                                            |
+| [generate_tag_resources_template.py](generate_tag_resources_template.py) | ✅ Bootstrap/merge de TAG_RESOURCES.xlsx                                                                                                                            |
+| [gui.py](gui.py) + [launch_gui.sh](launch_gui.sh)                        | ✅ GUI NiceGUI (puerto 8080) — input título sitio + input URL logo cliente + color picker live + switch "Forzar regeneración" + auto-detect de xlsx + uploads async |
+| [plantilla_sitio.xlsx](plantilla_sitio.xlsx)                             | ✅ Fuente de datos — última regeneración desde NI00011 (36 TAGs, 96 propiedades)                                                                                    |
+| [TAG_RESOURCES.xlsx](TAG_RESOURCES.xlsx)                                 | ✅ Enlaces por TAG                                                                                                                                                  |
+| [site_config.json](site_config.json)                                     | ✅ Tema editable vía GUI (color picker + título del sitio)                                                                                                          |
+| [comandos.txt](comandos.txt)                                             | ✅ Cheatsheet de comandos CLI por sección                                                                                                                           |
+| [New_Laptop.txt](New_Laptop.txt)                                         | ✅ Guía de instalación en laptop nuevo (Linux/Windows/macOS/WSL sin VSCode)                                                                                         |
+| [windows_launchers/](windows_launchers/)                                 | ✅ 4 `.bat` para Windows: lanzar (nativo/WSL), parar, instalar acceso directo + auto-arranque                                                                       |
+| `NI00011 Fichas Técnicas_Equipos STARnD GROUP SEB V3.xlsx`               | ✅ Source xlsx actual en raíz                                                                                                                                       |
+| `docs/assets/images/`                                                    | ✅ 37 carpetas TAG con imágenes extraídas (filtro posición+frecuencia activo)                                                                                       |
+| `docs/assets/logos/LogoCliente.png`                                      | ✅ Logo del cliente                                                                                                                                                 |
+| `docs/assets/logos/LogoRPCI.png`                                         | ⚠️ Falta — el banner muestra hueco en posición izquierda hasta agregarlo                                                                                            |
+| `docs/assets/icons/generic-image.svg`                                    | ✅ Fallback de thumbnail                                                                                                                                            |
+| Hyperlinks de recursos                                                   | ⚠️ Llenado parcial — algunas celdas vacías                                                                                                                          |
