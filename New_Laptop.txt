@@ -1,0 +1,213 @@
+═══════════════════════════════════════════════════════════════════════
+  INSTALACIÓN EN UN LAPTOP NUEVO (sin VSCode)
+  Aplicativo QR Groupe SEB — generador de sitio estático desde Excel
+═══════════════════════════════════════════════════════════════════════
+
+VSCode NO es necesario — es solo un editor. La aplicación es Python
+puro que se ejecuta en terminal + browser.
+
+
+───────────────────────────────────────────────────────────────────────
+  REQUISITOS MÍNIMOS
+───────────────────────────────────────────────────────────────────────
+
+  ✓ Python 3.10+              (lenguaje del aplicativo)
+  ✓ pip                       (instala 2 librerías Python)
+  ✓ Una terminal              (bash, PowerShell, CMD)
+  ✓ Un browser moderno        (Chrome, Edge, Firefox) para la GUI
+  ✓ Git (opcional)            (para clonar el repo; si no, transferir
+                               por USB o email)
+
+  ✗ NO necesitás: VSCode, IDE, Node, Ruby, Docker.
+
+
+───────────────────────────────────────────────────────────────────────
+  SETUP — LINUX NATIVO (Ubuntu/Debian/etc.)
+───────────────────────────────────────────────────────────────────────
+
+sudo apt update && sudo apt install -y python3 python3-pip git
+git clone https://github.com/jagilren/groupe_seb_qr.git
+cd groupe_seb_qr
+pip3 install --break-system-packages openpyxl nicegui
+./launch_gui.sh
+
+# Luego abrir en el browser: http://localhost:8080
+
+
+───────────────────────────────────────────────────────────────────────
+  SETUP — WINDOWS NATIVO (sin WSL)
+───────────────────────────────────────────────────────────────────────
+
+1. Python: descargar de https://www.python.org/downloads/
+   IMPORTANTE: marcar "Add Python to PATH" durante la instalación.
+
+2. Git (opcional): descargar de https://git-scm.com/download/win
+
+3. Abrir PowerShell o CMD y ejecutar:
+
+   git clone https://github.com/jagilren/groupe_seb_qr.git
+   cd groupe_seb_qr
+   pip install openpyxl nicegui
+   python gui.py
+
+4. Abrir browser en: http://localhost:8080
+
+Notas para Windows nativo:
+  - Los scripts .sh (./launch_gui.sh, ./update_site_from_excel.sh) NO
+    funcionan directos en CMD/PowerShell. Usá los comandos Python
+    equivalentes:
+        python gui.py
+        python excel_migrator.py plantilla_sitio.xlsx docs/
+  - Alternativa: instalar Git Bash (viene con Git) — ahí sí corren los .sh.
+
+
+───────────────────────────────────────────────────────────────────────
+  SETUP — WSL EN WINDOWS (recomendado si querés usar los scripts .sh)
+───────────────────────────────────────────────────────────────────────
+
+# 1. Instalar WSL (solo si no lo tenés)
+wsl --install -d Ubuntu
+
+# 2. Reiniciar Windows, esperar que WSL inicie y configurar usuario.
+
+# 3. Dentro de WSL (Ubuntu):
+sudo apt update && sudo apt install -y python3 python3-pip git
+git clone https://github.com/jagilren/groupe_seb_qr.git
+cd groupe_seb_qr
+pip3 install --break-system-packages openpyxl nicegui
+./launch_gui.sh
+
+# 4. Desde WSL, abrir browser de Windows:
+cmd.exe /c start http://localhost:8080
+
+
+───────────────────────────────────────────────────────────────────────
+  SETUP — macOS
+───────────────────────────────────────────────────────────────────────
+
+# Si no tenés Homebrew: instalarlo desde https://brew.sh
+brew install python git
+git clone https://github.com/jagilren/groupe_seb_qr.git
+cd groupe_seb_qr
+pip3 install openpyxl nicegui
+./launch_gui.sh
+
+# Abrir browser en: http://localhost:8080
+
+
+───────────────────────────────────────────────────────────────────────
+  SI NO PODÉS/QUERÉS CLONAR EL REPO
+───────────────────────────────────────────────────────────────────────
+
+# Desde tu laptop ACTUAL (donde ya funciona):
+tar czf qr_app.tar.gz \
+    --exclude=.git \
+    --exclude=__pycache__ \
+    --exclude=.docs.bak \
+    google-sites-migrator/
+
+# Transferir qr_app.tar.gz por USB/email/cloud al laptop nuevo.
+
+# En el laptop NUEVO (Linux/macOS/WSL):
+tar xzf qr_app.tar.gz && cd google-sites-migrator
+pip install openpyxl nicegui    # o pip3 --break-system-packages en Ubuntu 24
+python gui.py                   # o python3
+
+# En Windows nativo, usar 7-Zip para extraer el .tar.gz.
+
+
+───────────────────────────────────────────────────────────────────────
+  EDITAR EL CÓDIGO SIN VSCode (opciones)
+───────────────────────────────────────────────────────────────────────
+
+Cualquier editor de texto sirve para modificar archivos .py / .json / .md:
+
+  - Bloc de notas (Windows) / TextEdit (Mac) / gedit (Linux)
+        Básico, suficiente para cambios chicos.
+  - Notepad++ (Windows)               https://notepad-plus-plus.org/
+        Gratuito, ligero, syntax highlighting.
+  - Sublime Text (cross-platform)     https://www.sublimetext.com/
+        Gratuito para evaluar, rápido.
+  - nano (terminal, viene preinstalado en Linux/macOS)
+        Básico pero funciona vía SSH/terminal pura.
+  - vim / neovim                      Más curva de aprendizaje, muy poderoso.
+
+
+───────────────────────────────────────────────────────────────────────
+  VERIFICAR QUE TODO QUEDÓ INSTALADO
+───────────────────────────────────────────────────────────────────────
+
+# 1. Versión de Python (debe decir 3.10 o mayor)
+python --version
+# o si tenés varias versiones:
+python3 --version
+
+# 2. Imports OK
+python -c "import openpyxl, nicegui; print('✅ todo OK')"
+
+# 3. Lanzar la GUI
+python gui.py
+# Debe imprimir: "NiceGUI ready to go on http://localhost:8080"
+
+
+───────────────────────────────────────────────────────────────────────
+  USO BÁSICO (ya instalado)
+───────────────────────────────────────────────────────────────────────
+
+# Modo GUI (recomendado):
+./launch_gui.sh                 # Linux/macOS/WSL
+python gui.py                   # cross-platform
+# Luego abrir http://localhost:8080
+
+# Modo CLI rápido:
+python excel_migrator.py plantilla_sitio.xlsx docs/
+
+# Modo CLI completo (regenera + commit + push si tenés Git configurado):
+./update_site_from_excel.sh --push
+
+# Más comandos en: comandos.txt
+
+
+───────────────────────────────────────────────────────────────────────
+  PROBLEMAS COMUNES
+───────────────────────────────────────────────────────────────────────
+
+• "Python no se reconoce como comando" (Windows)
+    Re-instalá Python marcando "Add Python to PATH", o agregalo
+    manualmente desde Variables de Entorno.
+
+• "pip install" falla con "externally managed environment" (Ubuntu 24)
+    Usá:  pip3 install --break-system-packages openpyxl nicegui
+    O un venv:
+        python3 -m venv .venv
+        source .venv/bin/activate
+        pip install openpyxl nicegui
+
+• Puerto 8080 ya en uso al lanzar la GUI
+    Otro proceso está usándolo. Liberalo:
+        pkill -f "python gui.py"          # Linux/macOS/WSL
+    o cambia el puerto en gui.py (constante GUI_PORT).
+
+• El browser no carga localhost:8080
+    En WSL: usar cmd.exe /c start http://localhost:8080
+    En Windows nativo: probar 127.0.0.1:8080
+    Verificar que la GUI esté escuchando (en la terminal debe decir
+    "NiceGUI ready to go on http://localhost:8080").
+
+• "ModuleNotFoundError: No module named 'openpyxl'"
+    Falta instalar dependencias. Repetir:
+        pip install openpyxl nicegui
+
+
+───────────────────────────────────────────────────────────────────────
+  RESUMEN ULTRA-CORTO
+───────────────────────────────────────────────────────────────────────
+
+Mínimo absoluto:
+  1. Python 3.10+
+  2. pip install openpyxl nicegui
+  3. El folder del proyecto (clonado o copiado)
+  4. python gui.py
+  5. http://localhost:8080
+
+Tres comandos en cualquier OS. Sin VSCode. Sin IDE.
