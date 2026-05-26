@@ -4,15 +4,18 @@
   "banner_title_short": "PTAR STARnD",
   "site_url": "https://jagilren.github.io/groupe_seb_qr/",
   "theme": {
-    "accent": "#00ff80",
-    "accent_hover": "#00cc66",
-    "banner_gradient": "linear-gradient(135deg, #7fffbf 0%, #00ff80 60%, #00d66b 100%)",
-    "banner_text": "#1f2328",
-    "banner_shadow": "0 4px 14px rgba(0,255,128,0.25)",
-    "content_bg": "#e5fff2",
+    "accent": "#20c975",
+    "accent_hover": "#189d5b",
+    "banner_gradient": "linear-gradient(135deg, #7eeab4 0%, #20c975 60%, #1aa560 100%)",
+    "banner_text": "#ffffff",
+    "banner_shadow": "0 4px 14px rgba(32,201,117,0.25)",
+    "content_bg": "#d6f8e7",
     "card_bg": "#ffffff",
     "text": "#1f2328",
     "text_muted": "#57606a",
-    "border": "#ccfee5"
+    "border": "#c0f4da"
+  },
+  "logos": {
+    "right_href": "https://www.alimentosdvida.com/"
   }
 }

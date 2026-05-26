@@ -1,12 +1,12 @@
 {
   "source": "plantilla_sitio.xlsx",
-  "generated_at": "2026-05-26T09:59:58.027898",
+  "generated_at": "2026-05-26T13:04:37.538042",
   "site_title": "QR PTAR D'Vida Itagüi",
   "site_url": "https://jagilren.github.io/groupe_seb_qr/",
-  "total_tags": 40,
+  "total_tags": 42,
   "categories": {
     "EQUIPOS": 24,
-    "INSTRUMENTOS": 0,
+    "INSTRUMENTOS": 2,
     "TANQUES": 16
   },
   "tags": [
@@ -1037,6 +1037,40 @@
       "resources": {
         "Specifications": "https://drive.google.com/file/d/1yWg0gxxrTn9aG0JBJuClnerLCuVxGveX/view?usp=drive_link"
       }
+    },
+    {
+      "tag": "802-SV-001",
+      "category": "INSTRUMENTOS",
+      "title": "802-SV-001",
+      "properties": {
+        "SERVICIO": "Válvula solenoide",
+        "FUNCIÓN": "Ingreso/cierre de  aire de la bomba neumatica 802-P-01 (Floculante)",
+        "DESCRIPCIÓN DE OPERACIÓN": "Continua",
+        "FLUIDO": "Aire comprimido",
+        "TEMPERATURA MÁXIMA FLUIDO (°C)": "<30",
+        "TIPO": "Válvula solenoide con actuador neumático. Presión de suministro de aire: 29 ---145",
+        "RANGO DE TEMPERATURA DE TRABAJO (°C)": "20 - 25"
+      },
+      "ficha_tecnica_url": null,
+      "curva_url": null,
+      "resources": {}
+    },
+    {
+      "tag": "600-SV-01",
+      "category": "INSTRUMENTOS",
+      "title": "600-SV-01",
+      "properties": {
+        "SERVICIO": "Válvula solenoide",
+        "FUNCIÓN": "Ingreso/cierre de  aire Línea de aire comprimido hacia bomba 600-P-01 (Trasiego de lodos)",
+        "DESCRIPCIÓN DE OPERACIÓN": "Discontinua",
+        "FLUIDO": "Aire comprimido",
+        "TEMPERATURA MÁXIMA FLUIDO (°C)": "<30",
+        "TIPO": "Válvula solenoide con actuador eléctrico",
+        "RANGO DE TEMPERATURA DE TRABAJO (°C)": "20 - 25"
+      },
+      "ficha_tecnica_url": null,
+      "curva_url": null,
+      "resources": {}
     }
   ]
 }

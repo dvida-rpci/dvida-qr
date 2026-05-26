@@ -2,8 +2,8 @@
 
 Sitio generado automáticamente desde `plantilla_sitio.xlsx`.
 
-- **Fecha:** 2026-05-26 09:59:58
-- **TAGs publicados:** 40
-- **Categorías:** EQUIPOS, TANQUES
+- **Fecha:** 2026-05-26 13:04:37
+- **TAGs publicados:** 42
+- **Categorías:** EQUIPOS, INSTRUMENTOS, TANQUES
 
 URL pública: https://jagilren.github.io/groupe_seb_qr/

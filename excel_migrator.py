@@ -102,6 +102,7 @@ LOGO_LEFT_ALT = "RPCI — Red Proyectos con Ingeniería"
 LOGO_LEFT_HREF = "https://rpci.com.co"  # URL externa del logo izquierdo
 LOGO_RIGHT_PATH = "assets/logos/LogoCliente.png"
 LOGO_RIGHT_ALT = "Cliente"
+LOGO_RIGHT_HREF = ""  # URL externa del logo derecho (cliente); vacío = no clickeable
 
 
 def render_logo(rel_prefix: str, path: str, alt: str) -> str:
@@ -217,6 +218,7 @@ def load_site_config(path: Path) -> dict:
             "left_href": LOGO_LEFT_HREF,
             "right": LOGO_RIGHT_PATH,
             "right_alt": LOGO_RIGHT_ALT,
+            "right_href": LOGO_RIGHT_HREF,
         },
     }
     if not path.exists():
@@ -452,9 +454,11 @@ def page_skeleton(
             <span class="banner-title-full">{h(BANNER_TITLE_FULL)}</span>
             <span class="banner-title-short">{h(BANNER_TITLE_SHORT)}</span>
         </h1>
-        <div class="banner-logo banner-logo-right" aria-label="Cliente">
-            {render_logo(rel_prefix, LOGO_RIGHT_PATH, LOGO_RIGHT_ALT)}
-        </div>
+        {(
+            f'<a class="banner-logo banner-logo-right" href="{h(LOGO_RIGHT_HREF)}" target="_blank" rel="noopener" aria-label="{h(LOGO_RIGHT_ALT)}">{render_logo(rel_prefix, LOGO_RIGHT_PATH, LOGO_RIGHT_ALT)}</a>'
+            if LOGO_RIGHT_HREF
+            else f'<div class="banner-logo banner-logo-right" aria-label="{h(LOGO_RIGHT_ALT)}">{render_logo(rel_prefix, LOGO_RIGHT_PATH, LOGO_RIGHT_ALT)}</div>'
+        )}
         <button class="search-toggle" aria-label="Buscar" aria-controls="search-modal" aria-expanded="false">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="7"/>
@@ -2069,7 +2073,7 @@ def main():
     # Cargar config y aplicar overrides de título/URL/color/logos a los globals
     config = load_site_config(SITE_CONFIG_PATH)
     global SITE_TITLE, BANNER_TITLE_FULL, BANNER_TITLE_SHORT, SITE_URL, _MOBILE_THEME_COLOR
-    global LOGO_LEFT_PATH, LOGO_LEFT_ALT, LOGO_LEFT_HREF, LOGO_RIGHT_PATH, LOGO_RIGHT_ALT
+    global LOGO_LEFT_PATH, LOGO_LEFT_ALT, LOGO_LEFT_HREF, LOGO_RIGHT_PATH, LOGO_RIGHT_ALT, LOGO_RIGHT_HREF
     SITE_TITLE = config["site_title"]
     BANNER_TITLE_FULL = config["banner_title_full"]
     BANNER_TITLE_SHORT = config["banner_title_short"]
@@ -2080,6 +2084,7 @@ def main():
     LOGO_LEFT_HREF = config["logos"]["left_href"]
     LOGO_RIGHT_PATH = config["logos"]["right"]
     LOGO_RIGHT_ALT = config["logos"]["right_alt"]
+    LOGO_RIGHT_HREF = config["logos"].get("right_href", "")
 
     items, _ = load_items(input_path, output_dir)
     if not items:

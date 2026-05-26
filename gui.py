@@ -126,6 +126,7 @@ _initial_cfg = load_or_init_config()
 state = {
     "output_dir": str(REPO_ROOT / "docs"),
     "site_title": _initial_cfg.get("site_title", "QR Groupe SEB"),
+    "client_logo_href": _initial_cfg.get("logos", {}).get("right_href", ""),
     "accent_color": _initial_cfg.get("theme", {}).get("accent", "#7c3aed"),
     "fichas_path": None,        # Path al xlsx crudo subido en esta sesión
     "resources_uploaded": False,
@@ -135,9 +136,10 @@ state = {
 }
 
 
-def save_config(accent: str, site_title: str | None = None):
-    """Escribe site_config.json con la paleta derivada del color elegido
-    y el título del sitio (si se pasa)."""
+def save_config(accent: str, site_title: str | None = None,
+                client_logo_href: str | None = None):
+    """Escribe site_config.json con la paleta derivada del color elegido,
+    el título del sitio y el href del logo del cliente (si se pasan)."""
     cfg = load_or_init_config()
     if site_title is not None and site_title.strip():
         cfg["site_title"] = site_title.strip()
@@ -147,6 +149,17 @@ def save_config(accent: str, site_title: str | None = None):
     cfg.setdefault("banner_title_short", "PTAR STARnD")
     cfg.setdefault("site_url", "https://jagilren.github.io/groupe_seb_qr/")
     cfg["theme"] = derive_palette(accent)
+
+    # logos.right_href se setea desde la GUI; el resto del bloque logos
+    # mantiene defaults (paths y alts vienen del excel_migrator).
+    logos = cfg.setdefault("logos", {})
+    if client_logo_href is not None:
+        href = client_logo_href.strip()
+        if href:
+            logos["right_href"] = href
+        else:
+            logos.pop("right_href", None)  # vacío = quitar = no clickeable
+
     SITE_CONFIG.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -281,6 +294,24 @@ with ui.column().classes("max-w-3xl mx-auto p-6 gap-4 w-full"):
                 max_files=1,
                 label="Selecciona PNG/JPG (sobreescribe el anterior)",
             ).props('accept="image/*"').classes("flex-1")
+
+    # ── Enlace del logo del cliente ─────────────────────────────────────
+    with ui.card().classes("w-full"):
+        ui.label("🔗 Enlace al hacer click en el logo del cliente").classes("font-semibold")
+        ui.label(
+            "URL externa que abrirá en pestaña nueva al clickear el logo del cliente "
+            "(esquina derecha del banner). Dejar vacío → logo no clickeable."
+        ).classes("text-xs text-gray-600")
+
+        def on_client_href_change(e):
+            state["client_logo_href"] = (e.value or "").strip()
+
+        ui.input(
+            label="URL del cliente",
+            value=state["client_logo_href"],
+            on_change=on_client_href_change,
+            placeholder="Ej. https://alimentosdvida.com.co",
+        ).props("outlined dense type=url").classes("w-full")
 
     # ── Título del sitio ────────────────────────────────────────────────
     with ui.card().classes("w-full"):
@@ -442,7 +473,11 @@ async def generate():
             return
 
         # 1. Persistir color en site_config.json
-        save_config(state["accent_color"], state.get("site_title"))
+        save_config(
+            state["accent_color"],
+            state.get("site_title"),
+            state.get("client_logo_href"),
+        )
         log.push(f"🎨 site_config.json actualizado (accent={state['accent_color']})")
 
         # 2. (opcional) convert fichas → plantilla

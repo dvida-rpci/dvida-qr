@@ -46,6 +46,7 @@ Wrapper end-to-end:
 Permite configurar:
 - **📁 Carpeta destino** (default `docs/`, editable).
 - **🖼️ Logo del cliente** (drag-and-drop, sobrescribe `<dest>/assets/logos/LogoCliente.png`).
+- **🔗 Enlace del logo del cliente** (`logos.right_href`) — URL externa que abre en pestaña nueva al clickear el logo del cliente. Vacío → logo no clickeable (se renderiza como `<div>` en vez de `<a>`).
 - **📝 Título del sitio** (`site_title`) — reemplaza el texto por defecto "QR Groupe SEB".
 - **🎨 Color del tema** (color picker → deriva paleta completa de 10 vars + actualiza swatches de preview en vivo).
 - **📄 Archivo de fichas técnicas xlsx** (opcional; se guarda como `fichas_source.xlsx` en raíz).
@@ -107,7 +108,7 @@ Acciones:
 ## UI
 
 - **Acordeón compartido** (`.acc-item / .acc-header / .acc-body`) en 3 niveles: home (por categoría), categoría (por item con preview 3 props), item (por propiedad). Toggle vía `.open`, inician cerrados.
-- **Banner** sticky con degradé: `[☰ menú] [🏠 home] [logo RPCI → rpci.com.co ↗] | título centrado | [logo cliente] [🔍 búsqueda]`. El logo izquierdo es link externo; el botón home es la navegación interna al index.
+- **Banner** sticky con degradé: `[☰ menú] [🏠 home] [logo RPCI → rpci.com.co ↗] | título centrado | [logo cliente → URL configurable] [🔍 búsqueda]`. Ambos logos son links externos opcionales: el izquierdo siempre lleva un href (default `rpci.com.co`); el derecho solo si `logos.right_href` está set en el config (sino se renderiza como `<div>` no clickeable). El botón home es la navegación interna al index.
 - **Búsqueda**: índice embebido como `window.__SEARCH_INDEX__` vía `<script src="search-index.js">` (funciona también con `file://`, no depende de `fetch()`). Debounce 80ms, ↑↓ Enter Esc, `<mark>` highlight. Fallback: si la variable no está, `fetch('search-index.json?_t=…')`.
 - **Lightbox** imágenes: keyboard arrows, swipe táctil 50px, clase `.single` oculta nav si hay 1 imagen.
 - **Mobile-first:** topbar+hamburger <900px, sidebar overlay (transform + backdrop 45%), touch targets ≥44px, grid 3/2/1 cols (desktop/mobile/≤380px), `<400px` oculta `.acc-meta`, thumbnail del botón "Ver imagen" pasa a 18×18 en mobile, Esc cierra sidebar, scroll bloqueado mientras abierto, auto-scroll a item activo del menú.
@@ -132,7 +133,8 @@ Archivo opcional en la raíz; sobrescribe defaults sin tocar Python. Schema:
   },
   "logos": {
     "left": "assets/logos/LogoRPCI.png", "left_alt": "RPCI", "left_href": "https://rpci.com.co",
-    "right": "assets/logos/LogoCliente.png", "right_alt": "Cliente"
+    "right": "assets/logos/LogoCliente.png", "right_alt": "Cliente",
+    "right_href": "https://alimentosdvida.com.co"
   }
 }
 ```
@@ -216,7 +218,7 @@ Bajo `<output_dir>/`:
 | [update_site_from_excel.sh](update_site_from_excel.sh) | ✅ Wrapper CLI |
 | [generate_excel_template.py](generate_excel_template.py) | ✅ Plantilla vacía desde sitio existente |
 | [generate_tag_resources_template.py](generate_tag_resources_template.py) | ✅ Bootstrap/merge de TAG_RESOURCES.xlsx |
-| [gui.py](gui.py) + [launch_gui.sh](launch_gui.sh) | ✅ GUI NiceGUI (puerto 8080) — input título sitio + color picker live + switch "Forzar regeneración" + auto-detect de xlsx + uploads async |
+| [gui.py](gui.py) + [launch_gui.sh](launch_gui.sh) | ✅ GUI NiceGUI (puerto 8080) — input título sitio + input URL logo cliente + color picker live + switch "Forzar regeneración" + auto-detect de xlsx + uploads async |
 | [plantilla_sitio.xlsx](plantilla_sitio.xlsx) | ✅ Fuente de datos — última regeneración desde NI00011 (36 TAGs, 96 propiedades) |
 | [TAG_RESOURCES.xlsx](TAG_RESOURCES.xlsx) | ✅ Enlaces por TAG |
 | [site_config.json](site_config.json) | ✅ Tema editable vía GUI (color picker + título del sitio) |

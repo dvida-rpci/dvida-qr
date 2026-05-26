@@ -22,6 +22,8 @@ EQUIPO,https://dvida-rpci.github.io/dvida-qr/equipos/801-P-01.html
 EQUIPO,https://dvida-rpci.github.io/dvida-qr/equipos/802-P-01.html
 EQUIPO,https://dvida-rpci.github.io/dvida-qr/equipos/803-P-01.html
 EQUIPO,https://dvida-rpci.github.io/dvida-qr/equipos/807-P-01.html
+INSTRUMENTO,https://dvida-rpci.github.io/dvida-qr/instrumentos/600-SV-01.html
+INSTRUMENTO,https://dvida-rpci.github.io/dvida-qr/instrumentos/802-SV-001.html
 TANQUE,https://dvida-rpci.github.io/dvida-qr/tanques/100-TK-01.html
 TANQUE,https://dvida-rpci.github.io/dvida-qr/tanques/100-TK-02.html
 TANQUE,https://dvida-rpci.github.io/dvida-qr/tanques/200-TK-01.html
