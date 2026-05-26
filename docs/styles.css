@@ -815,13 +815,13 @@ body.lightbox-open { overflow: hidden; }
 /* ---------------- Overrides desde site_config.json ---------------- */
 :root {
     --bg: #ffffff;
-    --border: #ece4f9;
+    --border: #fef4f4;
     --text: #1f2328;
     --text-muted: #57606a;
-    --accent: #7c3aed;
-    --accent-hover: #6d28d9;
-    --banner-bg: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 50%, #c4b5fd 100%);
-    --banner-text: #3b1f5e;
-    --banner-shadow: 0 4px 14px rgba(167,139,250,0.25);
-    --content-bg: #faf7ff;
+    --accent: #ed3939;
+    --accent-hover: #de1414;
+    --banner-bg: linear-gradient(135deg, #f7adad 0%, #ed3939 60%, #e81515 100%);
+    --banner-text: #ffffff;
+    --banner-shadow: 0 4px 14px rgba(237,57,57,0.25);
+    --content-bg: #ffffff;
 }

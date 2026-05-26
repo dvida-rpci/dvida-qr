@@ -1,0 +1,182 @@
+═══════════════════════════════════════════════════════════════════════
+  COMANDOS DEL APLICATIVO QR GROUPE SEB
+  (asume: python3, openpyxl y nicegui ya instalados)
+═══════════════════════════════════════════════════════════════════════
+
+
+───────────────────────────────────────────────────────────────────────
+  1. FLUJO TÍPICO (CLI end-to-end)
+───────────────────────────────────────────────────────────────────────
+
+# Regenerar el sitio en docs/ sin pushear
+./update_site_from_excel.sh
+
+# Re-convertir fichas crudas → plantilla → sitio (todo en un paso)
+./update_site_from_excel.sh --from-fichas
+
+# Regenerar + commit + push a GitHub Pages (1-2 min para que se vea online)
+./update_site_from_excel.sh --push
+
+
+───────────────────────────────────────────────────────────────────────
+  2. PASO A PASO (control manual)
+───────────────────────────────────────────────────────────────────────
+
+# Paso 1: fichas crudas xlsx → plantilla unificada + imágenes extraídas
+python3 convert_fichas_to_template.py "NP00033 Fichas Técnicas Equipos 20250408 DG.xlsx"
+
+# Paso 1 (variante): solo re-extrae imágenes, no toca plantilla
+python3 convert_fichas_to_template.py "NP00033 Fichas Técnicas Equipos 20250408 DG.xlsx" --images-only
+
+# Paso 2: bootstrap/merge de TAG_RESOURCES.xlsx (preserva hyperlinks editados)
+python3 generate_tag_resources_template.py
+
+# Paso 3: editar a mano plantilla_sitio.xlsx y TAG_RESOURCES.xlsx
+#         (en Excel o LibreOffice — usar Ctrl+K para hyperlinks)
+
+# Paso 4: generar el sitio desde la plantilla
+python3 excel_migrator.py plantilla_sitio.xlsx docs/
+
+# Paso 4 (variante): generar a otra carpeta destino
+python3 excel_migrator.py plantilla_sitio.xlsx /tmp/mi_sitio/
+
+
+───────────────────────────────────────────────────────────────────────
+  3. GUI (NiceGUI) — interfaz web local
+───────────────────────────────────────────────────────────────────────
+
+# Lanzar la GUI (escucha en http://localhost:8080)
+./launch_gui.sh
+# o equivalente:
+python3 gui.py
+
+# Lanzar en background y dejar la terminal libre
+python3 gui.py > /tmp/gui.log 2>&1 &
+
+# Abrir la GUI en el browser de Windows desde WSL
+cmd.exe /c start http://localhost:8080
+
+# Ver logs en vivo de la GUI
+tail -f /tmp/gui.log
+
+# Verificar que la GUI esté escuchando
+ss -ltnp | grep :8080 && echo "✅ GUI viva" || echo "❌ GUI no corre"
+
+# Detener la GUI
+pkill -f "python3 gui.py"
+# o force:
+pkill -9 -f "python3 gui.py"
+
+
+───────────────────────────────────────────────────────────────────────
+  4. PREVIEW LOCAL DEL SITIO (http.server)
+───────────────────────────────────────────────────────────────────────
+
+# Servir docs/ en localhost:8000
+cd docs && python3 -m http.server 8000
+
+# Servir otra carpeta sin moverse de cwd
+python3 -m http.server 8000 --directory /home/administrador/google-sites-migrator/docs
+
+# Servir en otro puerto (si 8000 está ocupado)
+python3 -m http.server 8765 --directory docs/
+
+# Abrir el preview desde WSL
+cmd.exe /c start http://localhost:8000
+
+# Detener el preview server
+pkill -f "http.server"
+
+
+───────────────────────────────────────────────────────────────────────
+  5. GIT / PUBLICACIÓN
+───────────────────────────────────────────────────────────────────────
+
+# Ver qué cambió
+git status
+git diff docs/
+
+# Publicar manualmente
+git add docs/
+git commit -m "Actualizar sitio"
+git push
+
+# Ver últimos commits
+git log --oneline -10
+
+# Restaurar imágenes borradas por accidente (working tree)
+git checkout HEAD -- docs/assets/images/
+
+
+───────────────────────────────────────────────────────────────────────
+  6. INSPECCIÓN / DEBUGGING
+───────────────────────────────────────────────────────────────────────
+
+# Listado de URLs de todas las subpáginas (generado por excel_migrator)
+cat docs/urls.txt
+wc -l docs/urls.txt                       # contar TAGs publicados
+cut -d, -f1 docs/urls.txt | sort | uniq -c  # contar por categoría
+
+# Metadata de la última generación
+cat docs/migration_metadata.json | python3 -m json.tool | head -30
+
+# ¿Cuántos archivos hay en assets/images?
+find docs/assets/images -type f | wc -l
+
+# Verificar puertos ocupados
+ss -ltnp | grep -E ":8000|:8080"           # ambos a la vez
+lsof -i :8080                              # con más detalle
+
+# Verificar el sitio publicado online
+curl -s -o /dev/null -w "HTTP %{http_code}\n" https://jagilren.github.io/groupe_seb_qr/
+
+# Comparar CSS local vs producción (deben coincidir si está sincronizado)
+diff <(curl -s https://jagilren.github.io/groupe_seb_qr/styles.css) docs/styles.css
+
+
+───────────────────────────────────────────────────────────────────────
+  7. PROCESOS / LIMPIEZA
+───────────────────────────────────────────────────────────────────────
+
+# Matar todos los http.server (preview huérfano de sesiones anteriores)
+pkill -f "http.server"
+
+# Matar todo lo del aplicativo (GUI + preview)
+pkill -f "python3 gui.py"
+pkill -f "http.server"
+
+# Liberar un puerto específico
+kill $(lsof -t -i:8080)
+
+
+───────────────────────────────────────────────────────────────────────
+  8. CONFIGURACIÓN
+───────────────────────────────────────────────────────────────────────
+
+# Ver tema actual del sitio
+cat site_config.json
+
+# Editar tema (cambiar paleta sin tocar Python)
+nano site_config.json
+# Luego regenerar:
+python3 excel_migrator.py plantilla_sitio.xlsx docs/
+
+# Generar plantilla vacía a partir del sitio existente (útil para empezar de cero)
+python3 generate_excel_template.py
+
+
+───────────────────────────────────────────────────────────────────────
+  9. CHEATSHEET — los 4 comandos que más vas a usar
+───────────────────────────────────────────────────────────────────────
+
+# Regenerar + publicar todo en una línea
+./update_site_from_excel.sh --push
+
+# Probar local antes de publicar
+python3 excel_migrator.py plantilla_sitio.xlsx docs/ && cd docs && python3 -m http.server 8000
+
+# GUI rápida
+./launch_gui.sh
+
+# Restaurar si rompiste algo en docs/
+git checkout HEAD -- docs/

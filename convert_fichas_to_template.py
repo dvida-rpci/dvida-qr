@@ -48,7 +48,13 @@ IMAGES_DIR = REPO_ROOT / "docs" / "assets" / "images"
 
 # Imágenes que aparecen en MÁS de este umbral de hojas se consideran plantilla
 # (logo, header, etc.) y se descartan. Solo se conservan las específicas del equipo.
-IMAGE_COMMON_THRESHOLD = 5
+# Umbral "plantilla común": una imagen que aparece en MÁS de N hojas se considera
+# decorativa (logo/header del documento) y se descarta para todas las hojas.
+# Subido de 5 → 30 (mayo 2026) porque imágenes de familias de equipos
+# (p.ej. una bomba reutilizada en 14 fichas) caían como falsos positivos.
+# Además, extract_images() tiene un fallback: si una hoja queda con 0 imágenes
+# tras el filtro, conserva todas (mejor repetir que dejar una ficha sin imagen).
+IMAGE_COMMON_THRESHOLD = 30
 
 CATEGORIES = ["EQUIPOS", "INSTRUMENTOS", "TANQUES"]
 
@@ -73,15 +79,22 @@ TYPE_TO_CATEGORY = {
 }
 
 # Labels a IGNORAR (metadata administrativa, headers de sección)
+# Nota: FLUIDO NO está aquí porque también es una propiedad legítima ("FLUIDO: ARnD").
+# Se distingue por contexto: como block name está solo en col 0 sin valor a la derecha;
+# como label tiene un valor en alguna celda posterior.
 IGNORE_LABELS = {
-    # Headers de bloque
-    "GENERAL", "TANQUE", "EQUIPO", "FLUIDO", "NOTAS", "FICHA TÉCNICA",
+    # Headers de bloque (estos NUNCA son propiedades)
+    "GENERAL", "TANQUE", "EQUIPO", "INSTRUMENTO", "NOTAS", "FICHA TÉCNICA",
     # Metadata administrativa
-    "PLANTA", "UBICACIÓN", "VERSIÓN", "FECHA", "ELABORÓ", "REVISÓ", "SOPORTE",
+    "PLANTA", "UBICACIÓN", "VERSIÓN", "FECHA", "ELABORÓ", "REVISÓ", "APROBÓ",
+    "SOPORTE", "REV.", "REV",
     # Constantes redundantes que aparecen pegadas
     "STARND ETAPA 1 Y 2", "ITAGUI - ANTIOQUIA",
-    # Etiqueta del TAG (lo manejamos por separado)
-    "TAG N°", "TAG N",
+    "RIONEGRO, ANTIOQUIA", "STARND GROUPE SEB S.A.S",
+    # Etiqueta del TAG (lo manejamos por separado vía sheet name)
+    "TAG N°", "TAG N", "TAG",
+    # Header decorativo de hojas auxiliares
+    "BOMBA DE AGUA",
 }
 
 
@@ -137,8 +150,10 @@ def is_valid_label(label: str) -> bool:
     # Texto que es una fecha
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}.*", label):
         return False
-    # Si es una etiqueta tipo "Versión"/"Fecha"/"Elaboró"
-    if upper in ("VERSIÓN", "FECHA", "ELABORÓ", "REVISÓ"):
+    # Iniciales tipo "DG", "WO", "AB" (metadata de Elaboró/Revisó/Aprobó)
+    # - 2-3 chars, todos mayúsculas, solo letras → casi seguro iniciales
+    # Excluye 'pH' (mixed case, válido) y otros labels mixtos legítimos.
+    if len(label) <= 3 and label.isupper() and label.isalpha():
         return False
     return True
 
@@ -157,34 +172,47 @@ def format_value(value) -> str:
 def extract_pairs(ws) -> dict[str, str]:
     """
     Devuelve un dict {label: value} con las propiedades de la hoja.
-    Recorre fila por fila buscando pares de celdas adyacentes label:value.
-    Si el mismo label aparece dos veces, conserva el primer valor no vacío.
+
+    Estrategia: una fila puede tener label y valor con N columnas de gap entre
+    medio (las plantillas industriales suelen tener merges/celdas vacías como
+    separación visual). Por cada fila:
+        1. Busca el último valor no vacío (de derecha a izquierda) = candidato VALUE.
+        2. Escanea de derecha a izquierda desde ahí hasta col 0, buscando el primer
+           string que pase is_valid_label() → ese es el LABEL.
+    Si el mismo label aparece dos veces, conserva el primer valor encontrado.
     """
     pairs: dict[str, str] = {}
     for row in ws.iter_rows(values_only=True):
         cells = list(row)
-        i = 0
-        while i < len(cells) - 1:
-            cell = cells[i]
-            if cell is None or not isinstance(cell, str):
-                i += 1
+        if not cells:
+            continue
+
+        # 1) Encontrar el ÚLTIMO valor no vacío de la fila
+        value_idx = None
+        for i in range(len(cells) - 1, -1, -1):
+            v = cells[i]
+            if v is not None and format_value(v):
+                value_idx = i
+                break
+        if value_idx is None or value_idx == 0:
+            continue  # no hay value, o está en col 0 (no hay espacio para label)
+
+        value_str = format_value(cells[value_idx])
+        # Si el "value" es en realidad un header decorativo, descartar
+        if value_str.upper() in IGNORE_LABELS:
+            continue
+
+        # 2) Escanear hacia la izquierda buscando un label válido
+        for j in range(value_idx - 1, -1, -1):
+            cand = cells[j]
+            if cand is None or not isinstance(cand, str):
                 continue
-            label = normalize_label(cell)
-            # Buscar el primer valor no vacío en las celdas adyacentes (hasta 3)
-            value = None
-            j = i + 1
-            while j < len(cells) and j <= i + 3:
-                v = cells[j]
-                if v is not None and format_value(v):
-                    value = v
-                    break
-                j += 1
-            if value is not None and is_valid_label(label):
-                value_str = format_value(value)
-                # El valor no puede ser un label conocido (evita capturar headers como valores)
-                if value_str.upper() not in IGNORE_LABELS and label not in pairs:
-                    pairs[label] = value_str
-            i += 1
+            label = normalize_label(cand)
+            if not is_valid_label(label):
+                continue
+            if label not in pairs:
+                pairs[label] = value_str
+            break  # solo el label más cercano a la izquierda del value
     return pairs
 
 
@@ -194,7 +222,18 @@ def extract_pairs(ws) -> dict[str, str]:
 _XLSX_NS = {
     'r':    'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
     'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
+    'xdr':  'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing',
+    'a':    'http://schemas.openxmlformats.org/drawingml/2006/main',
 }
+
+# Filtro de logos por posición + tamaño:
+#   Si el anchor superior izquierdo está en filas Excel 1-3 (0-based 0-2) Y
+#   la imagen mide ≤ LOGO_MAX_HEIGHT_ROWS filas de alto → se considera logo
+#   del header y se descarta.
+#   Si está arriba pero mide más → es una foto real del equipo (alguien la
+#   colocó en posición inusual) y se conserva.
+HEADER_ANCHOR_MAX_ROW = 2       # filas 1-3 Excel
+LOGO_MAX_HEIGHT_ROWS = 5        # un logo típico abarca 1-3 filas; una foto >10
 
 
 def _resolve_target(base: str, target: str) -> str:
@@ -211,18 +250,80 @@ def _resolve_target(base: str, target: str) -> str:
     return '/'.join(base.split('/')[:-1] + [target])
 
 
-def _sheet_to_images_map(zf: zipfile.ZipFile) -> dict[str, list[str]]:
-    """Devuelve {sheet_name: [paths de imagen en el zip]} para cada hoja."""
+def _parse_drawing_anchors(zf: zipfile.ZipFile, drawing_path: str,
+                            rid_to_target: dict[str, str]) -> list[tuple[str, int, int]]:
+    """Parsea xl/drawings/drawing*.xml y devuelve [(image_path, from_row, to_row)].
+
+    Ambas filas son 0-based.
+      - from_row: fila de la esquina superior izquierda. -1 si absoluteAnchor.
+      - to_row: fila de la esquina inferior derecha. -1 si oneCellAnchor o
+        absoluteAnchor (no llevan `<xdr:to>`).
+    """
+    XDR = '{%s}' % _XLSX_NS['xdr']
+    A = '{%s}' % _XLSX_NS['a']
+    R = '{%s}' % _XLSX_NS['r']
+    drawing_xml = ET.fromstring(zf.read(drawing_path))
+    result: list[tuple[str, int, int]] = []
+
+    def _row_of(elem):
+        if elem is None:
+            return -1
+        row_e = elem.find(XDR + 'row')
+        if row_e is None or row_e.text is None:
+            return -1
+        try:
+            return int(row_e.text)
+        except ValueError:
+            return -1
+
+    for tag in ('twoCellAnchor', 'oneCellAnchor', 'absoluteAnchor'):
+        for anchor in drawing_xml.findall(XDR + tag):
+            from_row = _row_of(anchor.find(XDR + 'from'))
+            to_row = _row_of(anchor.find(XDR + 'to'))
+            # Buscar TODOS los <a:blip> dentro del anchor a cualquier
+            # profundidad — esto cubre:
+            #   - <xdr:pic>/<xdr:blipFill>/<a:blip> (caso común)
+            #   - <xdr:grpSp>/<xdr:pic>/<xdr:blipFill>/<a:blip> (group shapes
+            #     con imagen, p. ej. fotos del equipo agrupadas con texto)
+            #   - cualquier otro contenedor anidado
+            for blip in anchor.iter(A + 'blip'):
+                rid = blip.get(R + 'embed')
+                if not rid or rid not in rid_to_target:
+                    continue
+                full_path = _resolve_target(drawing_path, rid_to_target[rid])
+                result.append((full_path, from_row, to_row))
+    return result
+
+
+def _is_header_logo(from_row: int, to_row: int) -> bool:
+    """True si la imagen parece logo del header (arriba + pequeña).
+
+    Criterio: anclada en filas Excel 1-3 (0-based 0-2) Y mide pocas filas.
+    Si el anchor no expone `to_row` (oneCellAnchor), asume logo cuando está arriba.
+    """
+    if not (0 <= from_row <= HEADER_ANCHOR_MAX_ROW):
+        return False  # no está en el header
+    if to_row < 0:
+        return True   # oneCellAnchor en el header → asumir logo
+    return (to_row - from_row) <= LOGO_MAX_HEIGHT_ROWS
+
+
+def _sheet_to_images_map(zf: zipfile.ZipFile) -> dict[str, list[tuple[str, int, int]]]:
+    """Devuelve {sheet_name: [(image_path, from_row, to_row), ...]} por hoja.
+
+    Filas 0-based: 0=fila 1 Excel, 1=fila 2, etc.
+    from_row=-1 si absoluteAnchor; to_row=-1 si oneCellAnchor/absoluteAnchor.
+    """
     wb_xml = ET.fromstring(zf.read('xl/workbook.xml'))
     sheets = [{'name': s.get('name'),
                'rid': s.get('{%s}id' % _XLSX_NS['r'])}
               for s in wb_xml.find('main:sheets', _XLSX_NS)]
     wb_rels = ET.fromstring(zf.read('xl/_rels/workbook.xml.rels'))
-    rid_to_target = {r.get('Id'): r.get('Target') for r in wb_rels}
+    wb_rid_to_target = {r.get('Id'): r.get('Target') for r in wb_rels}
 
-    result: dict[str, list[str]] = {}
+    result: dict[str, list[tuple[str, int]]] = {}
     for s in sheets:
-        sheet_path = 'xl/' + rid_to_target[s['rid']]
+        sheet_path = 'xl/' + wb_rid_to_target[s['rid']]
         rels_path = sheet_path.replace('worksheets/', 'worksheets/_rels/') + '.rels'
         if rels_path not in zf.namelist():
             result[s['name']] = []
@@ -244,11 +345,9 @@ def _sheet_to_images_map(zf: zipfile.ZipFile) -> dict[str, list[str]]:
             result[s['name']] = []
             continue
         drawing_rels = ET.fromstring(zf.read(drawing_rels_path))
-        images = []
-        for r in drawing_rels:
-            if 'image' in r.get('Type', '').lower():
-                images.append(_resolve_target(drawing_path, r.get('Target')))
-        result[s['name']] = images
+        rid_to_target = {r.get('Id'): r.get('Target') for r in drawing_rels
+                         if 'image' in r.get('Type', '').lower()}
+        result[s['name']] = _parse_drawing_anchors(zf, drawing_path, rid_to_target)
     return result
 
 
@@ -257,25 +356,58 @@ def extract_images(input_path: Path, images_dir: Path) -> dict[str, list[str]]:
     Extrae las imágenes específicas de cada hoja del Excel origen a
     images_dir/<TAG>/N.<ext> y devuelve un dict {TAG: [filenames]}.
 
-    Las imágenes comunes (plantilla, logos, headers) se descartan
-    automáticamente: aparecen en más de IMAGE_COMMON_THRESHOLD hojas.
+    Dos filtros encadenados para descartar logos/plantillas:
+      1. Filtro por POSICIÓN: imágenes con anchor en filas Excel 1-3
+         (HEADER_ANCHOR_MAX_ROW = 2 en 0-based) se descartan — son logos
+         del header del documento.
+      2. Filtro por FRECUENCIA: imágenes presentes en > IMAGE_COMMON_THRESHOLD
+         hojas se descartan — son plantillas decorativas comunes.
+
+    Si una hoja queda sin imágenes después de los filtros, se aplica un
+    fallback (conservar las del filtro #1) para que ningún TAG quede vacío.
     """
     print(f"🖼️  Extrayendo imágenes a: {images_dir}")
     images_dir.mkdir(parents=True, exist_ok=True)
 
     extracted: dict[str, list[str]] = {}
     with zipfile.ZipFile(input_path) as zf:
+        # {sheet: [(image_path, anchor_row_0based), ...]}
         sheet_to_images = _sheet_to_images_map(zf)
 
-        # Contar en cuántas hojas aparece cada imagen → descartar plantillas
+        # FILTRO 1 — heurística posición + tamaño:
+        #   - imagen anclada en filas 1-3 Y de pocas filas de alto → LOGO → descartar
+        #   - imagen anclada arriba pero grande (>5 filas) → FOTO → conservar
+        #   - imagen anclada bajo la fila 3 → no se evalúa, se conserva
+        header_filtered: dict[str, list[str]] = {}
+        header_logo_count = 0
+        for sheet_name, anchored in sheet_to_images.items():
+            kept = []
+            for img_path, from_row, to_row in anchored:
+                if _is_header_logo(from_row, to_row):
+                    header_logo_count += 1
+                    continue
+                kept.append(img_path)
+            header_filtered[sheet_name] = kept
+        if header_logo_count:
+            print(f"   ⊘ {header_logo_count} imágenes descartadas como logos del header "
+                  f"(filas 1-{HEADER_ANCHOR_MAX_ROW + 1} + ≤{LOGO_MAX_HEIGHT_ROWS} filas alto)")
+
+        # FILTRO 2 — por FRECUENCIA: descartar imágenes comunes a muchas hojas
         usage = defaultdict(int)
-        for imgs in sheet_to_images.values():
+        for imgs in header_filtered.values():
             for img in imgs:
                 usage[img] += 1
 
-        for sheet_name, image_paths in sheet_to_images.items():
+        for sheet_name, image_paths in header_filtered.items():
             specific = [p for p in image_paths
                        if usage[p] <= IMAGE_COMMON_THRESHOLD]
+            # Fallback: si TODAS las imágenes de la hoja superan el umbral
+            # de frecuencia, conservar las que pasaron el filtro #1
+            # (mejor mostrar imagen reutilizada que ninguna)
+            if not specific and image_paths:
+                print(f"   ℹ️  '{sheet_name}': todas las imágenes son 'comunes'; "
+                      f"se conservan {len(image_paths)} igual (fallback)")
+                specific = list(image_paths)
             if not specific:
                 continue
             # Expandir el nombre de hoja a TAGs (igual que en process_workbook)
@@ -326,10 +458,24 @@ def process_workbook(input_path: Path) -> tuple[list[dict], list[str]]:
     all_props: list[str] = []  # mantiene el orden de aparición
     seen_props: set[str] = set()
 
+    # Patrón que valida nombre de hoja como TAG (rechaza "Hoja3", "Sheet1", etc.)
+    valid_tag_re = re.compile(r"^\d{3}-[A-Z]+-")
+
     for sheet_name in wb.sheetnames:
+        # Filtrar hojas-ruido: Excel pone "Hoja3", "Sheet1" como default
+        if not valid_tag_re.match(sheet_name.strip()):
+            print(f"  ⊘ {sheet_name:30} → ignorada (no parece TAG: 'NNN-TYPE-...')")
+            continue
+
         ws = wb[sheet_name]
         tags = expand_tags_from_sheet_name(sheet_name)
         pairs = extract_pairs(ws)
+
+        # Filtrar hojas sin propiedades reales (ruido)
+        if not pairs:
+            print(f"  ⊘ {sheet_name:30} → ignorada (0 propiedades extraídas)")
+            continue
+
         category = infer_category(tags[0])
 
         # Acumular orden de aparición de las propiedades (preserva orden del Excel origen)
@@ -459,10 +605,19 @@ def write_instructions_sheet(wb: Workbook):
 # Main
 # ─────────────────────────────────────────────────────────────────────────
 def main():
-    input_path = Path(sys.argv[1]) if len(sys.argv) > 1 else INPUT_DEFAULT
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    flags = {a for a in sys.argv[1:] if a.startswith("--")}
+    input_path = Path(args[0]) if args else INPUT_DEFAULT
     if not input_path.exists():
         print(f"❌ No existe: {input_path}", file=sys.stderr)
         sys.exit(1)
+
+    # --images-only: solo re-extrae imágenes, no regenera plantilla_sitio.xlsx
+    # (útil si plantilla está editada a mano y no querés perder los hyperlinks)
+    if "--images-only" in flags:
+        print(f"🖼️  Modo --images-only: solo extrae imágenes desde {input_path.name}")
+        extract_images(input_path, IMAGES_DIR)
+        return
 
     rows, prop_columns = process_workbook(input_path)
 

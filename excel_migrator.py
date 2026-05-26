@@ -84,6 +84,13 @@ GENERIC_IMAGE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
 # Orden fijo de las categorías en el sitio
 CATEGORY_ORDER = ["EQUIPOS", "INSTRUMENTOS", "TANQUES"]
 
+# Forma singular usada en exports (urls.txt) — el sitio sigue mostrando los plurales
+CATEGORY_SINGULAR = {
+    "EQUIPOS": "EQUIPO",
+    "INSTRUMENTOS": "INSTRUMENTO",
+    "TANQUES": "TANQUE",
+}
+
 # Columnas fijas en la plantilla (las demás son propiedades dinámicas)
 FIXED_COLS_HEAD = ["TAG", "Categoría", "Título"]
 FIXED_COLS_TAIL = ["Ficha Técnica", "Curva"]
@@ -246,7 +253,7 @@ def load_tag_resources(xlsx_path: Path) -> dict[str, dict[str, str]]:
     return resources
 
 
-def load_items(xlsx_path: Path) -> tuple[list[Item], list[str]]:
+def load_items(xlsx_path: Path, output_dir: Path = DEFAULT_OUTPUT) -> tuple[list[Item], list[str]]:
     """Lee plantilla_sitio.xlsx → (items, lista de propiedades en orden)."""
     print(f"📖 Leyendo: {xlsx_path}")
     wb = load_workbook(xlsx_path, data_only=True)
@@ -305,7 +312,7 @@ def load_items(xlsx_path: Path) -> tuple[list[Item], list[str]]:
         ))
 
     # Cargar manifest de imágenes (si existe) y asignarlo a cada item
-    manifest_path = DEFAULT_OUTPUT / "assets" / "images" / "manifest.json"
+    manifest_path = output_dir / "assets" / "images" / "manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         for it in items:
@@ -456,6 +463,7 @@ def page_skeleton(
             </article>
         </main>
     </div>
+    <script src="{rel_prefix}search-index.js"></script>
     <script src="{rel_prefix}script.js"></script>
 </body>
 </html>
@@ -1549,8 +1557,14 @@ SCRIPT_JS = r"""document.addEventListener('DOMContentLoaded', function () {
 
     function loadIndex() {
         if (searchIndex || searchLoading) return Promise.resolve(searchIndex || []);
+        // 1) Embebido como variable global (search-index.js) → funciona en file:// y http://
+        if (window.__SEARCH_INDEX__) {
+            searchIndex = window.__SEARCH_INDEX__;
+            return Promise.resolve(searchIndex);
+        }
+        // 2) Fallback: fetch del JSON (sólo http://)
         searchLoading = true;
-        return fetch(rel + 'search-index.json')
+        return fetch(rel + 'search-index.json?_t=' + Date.now())
             .then(function (r) { return r.ok ? r.json() : []; })
             .then(function (data) { searchIndex = data; return data; })
             .catch(function () { searchIndex = []; return []; })
@@ -1777,15 +1791,35 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
         config = load_site_config(SITE_CONFIG_PATH)
     grouped = group_by_category(items)
 
-    # Limpiar docs/ preservando docs/assets/ (imágenes y otros recursos estáticos)
+    # Sanity check: rechazar destinos sospechosos que podrían wipe-ar assets/
+    # (ej. usuario teclea "docs/assets" o "docs/assets/images" por error).
+    suspect_names = {"assets", "images", "logos", "icons"}
+    if output_dir.name in suspect_names:
+        raise ValueError(
+            f"❌ Output dir inseguro: '{output_dir}' parece una carpeta de assets. "
+            f"Usá un destino como 'docs/' o '/tmp/mi_sitio/', no uno dentro de assets/."
+        )
+    if "assets" in output_dir.parts:
+        raise ValueError(
+            f"❌ Output dir inseguro: '{output_dir}' está dentro de una carpeta 'assets/'. "
+            f"Eso wipearía imágenes/logos. Elegí otro destino."
+        )
+
+    # Limpiar SOLO los archivos/dirs que el migrador genera (no toca foráneos)
+    KNOWN_FILES = {
+        "index.html", "README.md", "styles.css", "script.js", ".nojekyll",
+        "migration_metadata.json", "search-index.json", "search-index.js", "urls.txt",
+    }
     if output_dir.exists():
-        for entry in output_dir.iterdir():
-            if entry.name == "assets":
-                continue
-            if entry.is_dir():
-                shutil.rmtree(entry)
-            else:
-                entry.unlink()
+        for fname in KNOWN_FILES:
+            p = output_dir / fname
+            if p.is_file():
+                p.unlink()
+        # Subcarpetas de categoría (sin tocar assets/ ni nada foráneo)
+        for cat in CATEGORY_ORDER:
+            cat_dir = output_dir / cat.lower()
+            if cat_dir.is_dir():
+                shutil.rmtree(cat_dir)
     else:
         output_dir.mkdir(parents=True)
 
@@ -1902,11 +1936,24 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
                 f"{k}: {v[:60]}" for k, v in list(it.properties.items())[:2]
             ),
         })
-    (output_dir / "search-index.json").write_text(
-        json.dumps(search_index, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
+    index_json = json.dumps(search_index, ensure_ascii=False, separators=(",", ":"))
+    (output_dir / "search-index.json").write_text(index_json, encoding="utf-8")
+    # Mismo contenido como .js: funciona vía file:// (donde fetch está bloqueado)
+    (output_dir / "search-index.js").write_text(
+        f"window.__SEARCH_INDEX__ = {index_json};", encoding="utf-8"
     )
-    print("   ✅ README.md + migration_metadata.json + search-index.json")
+
+    # Listado plano "CATEGORIA_SINGULAR,URL" — uno por subpage (TAG)
+    base_url = SITE_URL.rstrip("/")
+    url_lines = []
+    for cat in CATEGORY_ORDER:
+        for it in grouped.get(cat, []):
+            cat_single = CATEGORY_SINGULAR.get(it.category, it.category)
+            url = f"{base_url}/{it.category.lower()}/{it.filename}"
+            url_lines.append(f"{cat_single},{url}")
+    (output_dir / "urls.txt").write_text("\n".join(url_lines) + "\n", encoding="utf-8")
+
+    print("   ✅ README.md + migration_metadata.json + search-index.{json,js} + urls.txt")
     print()
     print(f"✅ {total_items} TAGs publicados en {output_dir}/")
     print(f"   Por categoría: " + ", ".join(
@@ -1917,6 +1964,48 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
 # ─────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────
+# Nombres conocidos que pueden estar en raíz pero NO son fichas
+NON_FICHAS_XLSX = {"plantilla_sitio.xlsx", "TAG_RESOURCES.xlsx"}
+
+
+def discover_fichas_xlsx() -> Optional[Path]:
+    """Encuentra el xlsx de fichas más reciente en REPO_ROOT.
+
+    Independiente del nombre — toma cualquier `*.xlsx` que NO sea plantilla
+    ni TAG_RESOURCES. Si hay varios, devuelve el de mtime más reciente.
+    """
+    candidates = sorted(
+        (p for p in REPO_ROOT.glob("*.xlsx")
+         if p.name not in NON_FICHAS_XLSX and not p.name.startswith("~")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def ensure_images(output_dir: Path) -> bool:
+    """Si <output>/assets/images/ está vacío y hay un xlsx de fichas disponible
+    en REPO_ROOT, re-extrae las imágenes desde ahí. Idempotente: no toca nada
+    si ya hay imágenes.
+
+    Returns True si re-extrajo, False si no hizo nada.
+    """
+    images_dir = output_dir / "assets" / "images"
+    has_images = images_dir.exists() and any(images_dir.glob("*/*"))
+    if has_images:
+        return False
+    source = discover_fichas_xlsx()
+    if not source:
+        print(f"⚠️  {images_dir} vacío y no hay xlsx de fichas en {REPO_ROOT}")
+        return False
+    print(f"🖼️  {images_dir} vacío → re-extrayendo desde {source.name}")
+    # Import diferido: convert_fichas vive en el mismo directorio
+    sys.path.insert(0, str(REPO_ROOT))
+    from convert_fichas_to_template import extract_images
+    extract_images(source, images_dir)
+    return True
+
+
 def main():
     input_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_INPUT
     output_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_OUTPUT
@@ -1924,6 +2013,9 @@ def main():
     if not input_path.exists():
         print(f"❌ No existe: {input_path}", file=sys.stderr)
         sys.exit(1)
+
+    # Auto-recovery: si las imágenes están borradas, re-extraer desde fichas xlsx
+    ensure_images(output_dir)
 
     # Cargar config y aplicar overrides de título/URL/color/logos a los globals
     config = load_site_config(SITE_CONFIG_PATH)
@@ -1940,7 +2032,7 @@ def main():
     LOGO_RIGHT_PATH = config["logos"]["right"]
     LOGO_RIGHT_ALT = config["logos"]["right_alt"]
 
-    items, _ = load_items(input_path)
+    items, _ = load_items(input_path, output_dir)
     if not items:
         print("❌ No hay TAGs en la plantilla", file=sys.stderr)
         sys.exit(1)
