@@ -41,9 +41,20 @@ Wrapper end-to-end:
 
 ## Flujo (GUI alternativa)
 
-`gui.py` (NiceGUI) — interfaz local en `http://localhost:8080`. Lanza con `./launch_gui.sh`.
+`gui.py` (NiceGUI) — interfaz local en `http://localhost:8080`. Lanza con `./launch_gui.sh` o `python3 gui.py`.
 
-Permite: elegir carpeta destino arbitraria, subir logo del cliente, elegir un color base (deriva paleta completa), subir el xlsx de fichas, subir TAG_RESOURCES.xlsx, **Generar**, **Ver sitio** (lanza http.server en `:8000` apuntando al destino actual).
+Permite configurar:
+- **📁 Carpeta destino** (default `docs/`, editable).
+- **🖼️ Logo del cliente** (drag-and-drop, sobrescribe `<dest>/assets/logos/LogoCliente.png`).
+- **📝 Título del sitio** (`site_title`) — reemplaza el texto por defecto "QR Groupe SEB".
+- **🎨 Color del tema** (color picker → deriva paleta completa de 10 vars + actualiza swatches de preview en vivo).
+- **📄 Archivo de fichas técnicas xlsx** (opcional; se guarda como `fichas_source.xlsx` en raíz).
+- **📄 TAG_RESOURCES.xlsx** (opcional; sobrescribe el existente).
+- **🔄 Switch "Forzar regeneración"** (ver tabla abajo).
+
+Acciones:
+- **Generar sitio** — corre el pipeline completo, log streaming al UI.
+- **Ver sitio** — lanza `http.server` en `:8000` apuntando al destino actual, abre browser.
 
 ### Switch "🔄 Forzar regeneración" (default OFF)
 
@@ -86,7 +97,11 @@ Permite: elegir carpeta destino arbitraria, subir logo del cliente, elegir un co
 - **Validación de nombre de hoja**: solo hojas que matchean `^\d{3}-[A-Z]+-` se procesan (filtra `Hoja3`, `Sheet1`, hojas auxiliares). Hojas con 0 propiedades también se descartan.
 - Una hoja puede expandirse a múltiples TAGs: `100-P-01 A_B` → `100-P-01A`, `100-P-01B`; `400-MX-01_02_03_04` → 4 TAGs.
 - Categoría inferida del tipo: `TK|R|F|SD` → TANQUES, `P|MX|M|C|PS` → EQUIPOS, `AIT|FIT|SV|LT` → INSTRUMENTOS.
-- Imágenes: parsea `.xlsx` como ZIP, filtra plantillas (umbral usadas en >5 hojas) y copia las específicas a `docs/assets/images/<TAG>/`.
+- Imágenes: parsea `.xlsx` como ZIP, recorre `xl/drawings/drawing*.xml` y copia las específicas a `docs/assets/images/<TAG>/`. Tres filtros encadenados:
+  1. **Posición + tamaño** (`HEADER_ANCHOR_MAX_ROW=2`, `LOGO_MAX_HEIGHT_ROWS=5`): descarta imágenes ancladas en filas Excel 1-3 cuando miden ≤5 filas de alto (logos del header). Si mide ≥6 filas → es foto del equipo y se conserva aunque esté arriba.
+  2. **Frecuencia** (`IMAGE_COMMON_THRESHOLD=30`, subido de 5): descarta imágenes presentes en >30 hojas (logos universales que sobreviven el filtro 1).
+  3. **Fallback**: si tras los 2 filtros una hoja queda en 0 imágenes, conserva las del filtro 1 (mejor repetir que dejar vacío).
+- **Búsqueda recursiva de blips**: `anchor.iter("a:blip")` captura imágenes dentro de `xdr:grpSp` (group shapes) además de `xdr:pic` directas. Sin esto, imágenes agrupadas con captions (caso `400-C-01A/B`) se perdían.
 - Flag `--images-only`: re-extrae imágenes sin regenerar `plantilla_sitio.xlsx` (preserva hyperlinks editados a mano).
 
 ## UI
@@ -162,15 +177,21 @@ Bajo `<output_dir>/`:
 - **`extract_pairs` con "last value, scan left for label" (mayo 2026).** El enfoque viejo (label + value en celdas adyacentes ≤3 cols) fallaba en layouts con gap mayor (NI00011 tiene gap de 5). El nuevo es layout-agnóstico. Tradeoff: solo captura una pareja por fila, pero los xlsx industriales observados siempre tienen una pareja por fila.
 - **Switch "Forzar regeneración" NO borra archivos.** El usuario clarificó que "regenerar plantilla" significa re-poblar contenido vía `convert_fichas`, no `unlink()`. La estructura columnar pivotal se preserva automáticamente porque convert_fichas reescribe el xlsx con el mismo esqueleto.
 - **`urls.txt` deriva la base URL del git remote, no del config.** Los QRs físicos deben apuntar al repo real al que se está pusheando. Si cambiás de `jagilren/groupe_seb_qr` a `dvida-rpci/dvida-qr`, las URLs se ajustan solas en la próxima corrida. `site_url` del config sigue gobernando el banner/metadata/README pero NO `urls.txt`.
+- **Filtro de logos por posición + tamaño** (mayo 2026). Antes solo había filtro por frecuencia (`IMAGE_COMMON_THRESHOLD`), que descartaba imágenes legítimas reutilizadas en familias de equipos. Ahora la heurística primaria es: anchor en filas 1-3 + altura ≤5 filas = logo del header. Conserva fotos grandes ancladas arriba (caso real: hojas `400-C-01A/B` donde el operador puso la foto del equipo en posición no convencional).
+- **Búsqueda recursiva de blips** (`anchor.iter("a:blip")`). El parser viejo solo capturaba `<xdr:pic>` como hijo directo del anchor. Las imágenes dentro de `<xdr:grpSp>` (agrupadas con captions) se perdían silenciosamente. El fix recorre toda la jerarquía del anchor.
+- **GUI: upload handlers async**. NiceGUI 3.x cambió la API: `e.content.read()` (sync) → `await e.file.read()` (async). Sin el `async def` + `await`, los uploads fallan silenciosamente y `state["fichas_path"]` queda en None.
+- **GUI: `on_click=lambda: f()` en vez de `asyncio.create_task(f())`**. `create_task` desacopla del slot context de NiceGUI → `ui.notify` crashea con "slot stack empty". Lambda + NiceGUI await automático preserva el context.
+- **GUI: color picker via `on_change=` en el constructor**. El intento de bindear con `.on("change", ...)` no dispara en `ui.color_input` (Quasar usa otro nombre interno de evento). Pasar el handler como parámetro al constructor es la forma canónica.
 
 ## Limitaciones
 
-- Imágenes: solo las embebidas en el Excel (extracción por frecuencia, umbral 5).
+- Imágenes: solo las embebidas en el Excel. Filtro encadenado posición + frecuencia (ver "Convert fichas → plantilla" arriba).
 - Tablas complejas dentro de una propiedad → texto plano.
 - INSTRUMENTOS: categoría existe pero los Excel observados aportan 0; agregar hojas para poblarla.
 - `convert_fichas_to_template.py` sigue extrayendo imágenes a `docs/assets/images/` (hardcoded). Cuando el destino del migrator no es `docs/`, la GUI hace `merge_assets_into()` para propagar.
-- **Auto-recovery de imágenes**: `excel_migrator.py` ejecuta `ensure_images()` al inicio de `main()`. Si `<output>/assets/images/` está vacío y existe un xlsx de fichas conocido (`NP00033...xlsx` o `fichas_source.xlsx`) en raíz, re-extrae automáticamente vía import de `extract_images`. Manualmente: `python3 convert_fichas_to_template.py <xlsx> --images-only`.
+- **Auto-recovery de imágenes**: `excel_migrator.py` ejecuta `ensure_images()` al inicio de `main()`. Si `<output>/assets/images/` está vacío, `discover_fichas_xlsx()` escanea cualquier `*.xlsx` en raíz (independiente del nombre, excluyendo plantilla y TAG_RESOURCES) y re-extrae vía import de `extract_images`. Manualmente: `python3 convert_fichas_to_template.py <xlsx> --images-only`.
 - `extract_pairs` captura una pareja label-value por fila. Layouts con múltiples pares por fila (tipo grid) perderían pares; no se han observado hasta ahora.
+- TAGs sin foto real del equipo en el xlsx (solo logos en filas 1-3 con altura pequeña) salen sin imagen tras el filtro nuevo. Es correcto — la versión anterior mostraba los logos del header como si fueran fotos del equipo (engañoso).
 
 ## Recuperación / troubleshooting
 
@@ -180,6 +201,10 @@ Bajo `<output_dir>/`:
 - **El buscador no devuelve resultados al abrir el HTML con doble click** → ya no debería pasar. Si pasa: confirmar que el destino tiene `search-index.js` (no solo `.json`) y que el `<head>` lo carga con `<script src="search-index.js">`.
 - **El sitio sale con TAGs/propiedades del proyecto anterior** → la plantilla quedó vieja porque `convert_fichas` no corrió. Activá el switch **🔄 Forzar regeneración** en la GUI y asegurate de tener la xlsx nueva en raíz o subila por el widget.
 - **Solo 1 propiedad por TAG en la plantilla** → bug histórico del `extract_pairs` viejo (ventana de búsqueda muy corta). Resuelto en mayo 2026. Si vuelve a pasar con un layout nuevo: verificar que `is_valid_label` no esté rechazando los labels reales y que el value esté efectivamente en la fila (no en celda merged externa).
+- **TAG aparece sin imagen aunque la xlsx la tiene** → puede ser una imagen dentro de `<xdr:grpSp>` (agrupada con caption). Resuelto con `anchor.iter("a:blip")`. Si pasa con un xlsx nuevo: verificar que el anchor exista (parsear `xl/drawings/drawingN.xml` con un grep `<a:blip` o `<xdr:grpSp`).
+- **Imagen es un logo pero no se filtra** → probablemente está anclada en filas 4+ (fuera de `HEADER_ANCHOR_MAX_ROW=2`) o mide más de `LOGO_MAX_HEIGHT_ROWS=5` filas. Ajustar las constantes en `convert_fichas_to_template.py` o pedirle al usuario que mueva el logo a las primeras 3 filas en el xlsx.
+- **El color elegido en la GUI no se aplica** → bug histórico del `color_input.on("change", ...)` que no disparaba. Resuelto pasando `on_change=` en el constructor. Si vuelve a pasar: probar con un browser distinto, o verificar en el log de la GUI que aparece `🎨 Color seleccionado: #...` al cambiar.
+- **Upload de la GUI falla silenciosamente** → API de NiceGUI cambió en 3.x. Confirmar que el handler es `async def` y usa `await e.file.read()` en vez de `e.content.read()`.
 
 ## Estado de archivos
 
@@ -191,13 +216,16 @@ Bajo `<output_dir>/`:
 | [update_site_from_excel.sh](update_site_from_excel.sh) | ✅ Wrapper CLI |
 | [generate_excel_template.py](generate_excel_template.py) | ✅ Plantilla vacía desde sitio existente |
 | [generate_tag_resources_template.py](generate_tag_resources_template.py) | ✅ Bootstrap/merge de TAG_RESOURCES.xlsx |
-| [gui.py](gui.py) + [launch_gui.sh](launch_gui.sh) | ✅ GUI NiceGUI (puerto 8080) — switch "Forzar regeneración" + auto-detect de xlsx |
+| [gui.py](gui.py) + [launch_gui.sh](launch_gui.sh) | ✅ GUI NiceGUI (puerto 8080) — input título sitio + color picker live + switch "Forzar regeneración" + auto-detect de xlsx + uploads async |
 | [plantilla_sitio.xlsx](plantilla_sitio.xlsx) | ✅ Fuente de datos — última regeneración desde NI00011 (36 TAGs, 96 propiedades) |
 | [TAG_RESOURCES.xlsx](TAG_RESOURCES.xlsx) | ✅ Enlaces por TAG |
-| [site_config.json](site_config.json) | ✅ Tema (paleta lila pastel actual) |
+| [site_config.json](site_config.json) | ✅ Tema editable vía GUI (color picker + título del sitio) |
 | [comandos.txt](comandos.txt) | ✅ Cheatsheet de comandos CLI por sección |
+| [New_Laptop.txt](New_Laptop.txt) | ✅ Guía de instalación en laptop nuevo (Linux/Windows/macOS/WSL sin VSCode) |
+| [windows_launchers/](windows_launchers/) | ✅ 4 `.bat` para Windows: lanzar (nativo/WSL), parar, instalar acceso directo + auto-arranque |
 | `NI00011 Fichas Técnicas_Equipos STARnD GROUP SEB V3.xlsx` | ✅ Source xlsx actual en raíz |
-| `docs/assets/images/` | ✅ Carpetas TAG con imágenes extraídas |
-| `docs/assets/logos/LogoRPCI.png`, `LogoCliente.png` | ✅ Logos reales |
+| `docs/assets/images/` | ✅ 37 carpetas TAG con imágenes extraídas (filtro posición+frecuencia activo) |
+| `docs/assets/logos/LogoCliente.png` | ✅ Logo del cliente |
+| `docs/assets/logos/LogoRPCI.png` | ⚠️ Falta — el banner muestra hueco en posición izquierda hasta agregarlo |
 | `docs/assets/icons/generic-image.svg` | ✅ Fallback de thumbnail |
 | Hyperlinks de recursos | ⚠️ Llenado parcial — algunas celdas vacías |

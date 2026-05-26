@@ -111,17 +111,6 @@ def derive_palette(base: str) -> dict:
 # ─────────────────────────────────────────────────────────────────────────
 # Estado en memoria
 # ─────────────────────────────────────────────────────────────────────────
-state = {
-    "output_dir": str(REPO_ROOT / "docs"),
-    "accent_color": "#7c3aed",
-    "fichas_path": None,        # Path al xlsx crudo subido en esta sesión
-    "resources_uploaded": False,
-    "logo_uploaded": False,
-    "force_regenerate": False,  # checkbox: si True, wipe plantilla y assets antes
-    "preview_proc": None,       # subprocess del http.server
-}
-
-
 # ─────────────────────────────────────────────────────────────────────────
 # Persistencia del config
 # ─────────────────────────────────────────────────────────────────────────
@@ -131,10 +120,29 @@ def load_or_init_config() -> dict:
     return {}
 
 
-def save_config(accent: str):
-    """Escribe site_config.json con la paleta derivada del color elegido."""
+# Cargar el config al inicio para inicializar `state` con valores reales
+_initial_cfg = load_or_init_config()
+
+state = {
+    "output_dir": str(REPO_ROOT / "docs"),
+    "site_title": _initial_cfg.get("site_title", "QR Groupe SEB"),
+    "accent_color": _initial_cfg.get("theme", {}).get("accent", "#7c3aed"),
+    "fichas_path": None,        # Path al xlsx crudo subido en esta sesión
+    "resources_uploaded": False,
+    "logo_uploaded": False,
+    "force_regenerate": False,  # checkbox: si True, wipe plantilla y assets antes
+    "preview_proc": None,       # subprocess del http.server
+}
+
+
+def save_config(accent: str, site_title: str | None = None):
+    """Escribe site_config.json con la paleta derivada del color elegido
+    y el título del sitio (si se pasa)."""
     cfg = load_or_init_config()
-    cfg.setdefault("site_title", "QR Groupe SEB")
+    if site_title is not None and site_title.strip():
+        cfg["site_title"] = site_title.strip()
+    else:
+        cfg.setdefault("site_title", "QR Groupe SEB")
     cfg.setdefault("banner_title_full", "Documentación Técnica — PTAR STARnD")
     cfg.setdefault("banner_title_short", "PTAR STARnD")
     cfg.setdefault("site_url", "https://jagilren.github.io/groupe_seb_qr/")
@@ -273,6 +281,24 @@ with ui.column().classes("max-w-3xl mx-auto p-6 gap-4 w-full"):
                 max_files=1,
                 label="Selecciona PNG/JPG (sobreescribe el anterior)",
             ).props('accept="image/*"').classes("flex-1")
+
+    # ── Título del sitio ────────────────────────────────────────────────
+    with ui.card().classes("w-full"):
+        ui.label("📝 Título del sitio").classes("font-semibold")
+        ui.label(
+            "Aparece en la pestaña del navegador y como h1 del home. "
+            "Reemplaza el texto por defecto 'QR Groupe SEB'."
+        ).classes("text-xs text-gray-600")
+
+        def on_title_change(e):
+            state["site_title"] = (e.value or "").strip() or "QR Groupe SEB"
+
+        ui.input(
+            label="Título del sitio",
+            value=state["site_title"],
+            on_change=on_title_change,
+            placeholder="Ej. QR Alimentos D'vida",
+        ).props("outlined dense").classes("w-full")
 
     # ── Color del tema ─────────────────────────────────────────────────
     with ui.card().classes("w-full"):
@@ -416,7 +442,7 @@ async def generate():
             return
 
         # 1. Persistir color en site_config.json
-        save_config(state["accent_color"])
+        save_config(state["accent_color"], state.get("site_title"))
         log.push(f"🎨 site_config.json actualizado (accent={state['accent_color']})")
 
         # 2. (opcional) convert fichas → plantilla

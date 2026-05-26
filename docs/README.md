@@ -1,8 +1,8 @@
-# QR Groupe SEB
+# QR PTAR D'Vida Itagüi
 
 Sitio generado automáticamente desde `plantilla_sitio.xlsx`.
 
-- **Fecha:** 2026-05-26 09:44:04
+- **Fecha:** 2026-05-26 09:59:58
 - **TAGs publicados:** 40
 - **Categorías:** EQUIPOS, TANQUES
 
