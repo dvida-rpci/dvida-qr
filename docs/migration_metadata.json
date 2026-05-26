@@ -1,6 +1,6 @@
 {
   "source": "plantilla_sitio.xlsx",
-  "generated_at": "2026-05-25T21:44:18.194621",
+  "generated_at": "2026-05-26T09:44:04.420288",
   "site_title": "QR Groupe SEB",
   "site_url": "https://jagilren.github.io/groupe_seb_qr/",
   "total_tags": 40,
@@ -118,7 +118,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1GP_5peG1Kz38IixfG8e5zMKi0f_HLmsc/view?usp=drive_link"
+      }
     },
     {
       "tag": "200-P-02A",
@@ -148,7 +150,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1Ww5Pe2vGCYdbdcHhLhntFV3eON3Z3S36/view?usp=drive_link"
+      }
     },
     {
       "tag": "200-P-02B",
@@ -178,7 +182,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1Ww5Pe2vGCYdbdcHhLhntFV3eON3Z3S36/view?usp=drive_link"
+      }
     },
     {
       "tag": "200-P-01A",
@@ -663,7 +669,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1hDeqqyd7533etrn4FxXP4158a9O9bxuD/view?usp=drive_link"
+      }
     },
     {
       "tag": "400-C-01B",
@@ -688,7 +696,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1hDeqqyd7533etrn4FxXP4158a9O9bxuD/view?usp=drive_link"
+      }
     },
     {
       "tag": "500-TK-01",
@@ -823,7 +833,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1UGFMRq50zcTrQDKkIio8FFdHR2fhSnYd/view?usp=drive_link"
+      }
     },
     {
       "tag": "802-P-01",
@@ -913,7 +925,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1b1tp5_6Qi-BCIRfIfDii_a57OacD5pH2/view?usp=drive_link"
+      }
     },
     {
       "tag": "600-P-01",
@@ -941,7 +955,9 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1UGFMRq50zcTrQDKkIio8FFdHR2fhSnYd/view?usp=drive_link"
+      }
     },
     {
       "tag": "600-SD-01",
@@ -968,7 +984,10 @@
       },
       "ficha_tecnica_url": null,
       "curva_url": null,
-      "resources": {}
+      "resources": {
+        "Specifications": "https://drive.google.com/file/d/1VlvZySZLnHyeeEJD8dx4-j0sjiE2PmyI/view?usp=drive_link",
+        "Handbook_Manual": "https://drive.google.com/file/d/1w5nv_m9gUF5V6tVU1n1bx2inkPnPzgEq/view?usp=drive_link"
+      }
     },
     {
       "tag": "801-P-01",
