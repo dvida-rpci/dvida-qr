@@ -55,7 +55,7 @@ Permite configurar:
 
 Acciones:
 - **Generar sitio** — corre el pipeline completo, log streaming al UI.
-- **Ver sitio** — lanza `http.server` en `:8000` apuntando al destino actual, abre browser.
+- **Ver sitio** — lanza `http.server` en `:8190` apuntando al destino actual, abre browser.
 
 ### Switch "🔄 Forzar regeneración" (default OFF)
 
@@ -73,7 +73,7 @@ Acciones:
 
 - Si el destino difiere de `docs/`, `merge_assets_into()` copia archivos faltantes de `docs/assets/` al destino antes de generar (sin pisar uploads recientes).
 - `convert_fichas_to_template.py` sigue extrayendo imágenes a `docs/assets/images/` (canonical); el merge las propaga al destino elegido.
-- El servidor de preview se reinicia si cambia el destino. Cuidado con servidores http.server huérfanos en `:8000` — la GUI los detecta y avisa.
+- El servidor de preview se reinicia si cambia el destino. Cuidado con servidores http.server huérfanos en `:8190` — la GUI los detecta y avisa.
 - **Validación de destino** (también la hace el migrator): si el campo "Carpeta destino" se llama `assets`/`images`/`logos`/`icons` o tiene `assets/` en su path, la GUI aborta antes de tocar el filesystem.
 
 ## Mapping Excel → UI
@@ -88,6 +88,18 @@ Acciones:
 | `Ficha Técnica`, `Curva` (plantilla)                                      | botones en "Documentos y enlaces" (target=_blank)                                                            |
 | imágenes en `<output>/assets/images/<TAG>/`                               | botón "Ver N imágenes" con thumbnail (primera imagen) → lightbox. Fallback: `assets/icons/generic-image.svg` |
 | `TAG_RESOURCES.xlsx` (`Specifications`, `Handbook_Manual`, `Maintenance`) | botones "Especificaciones / Manual / Mantenimiento" en "Documentos y enlaces"                                |
+
+### Origen exacto de Specifications / Handbook_Manual / Maintenance (por TAG)
+
+Estos 3 botones **no** vienen de `plantilla_sitio.xlsx` — vienen de un archivo separado: `TAG_RESOURCES.xlsx`.
+
+- **Archivo:** `TAG_RESOURCES.xlsx` en la raíz del repo, hoja `TAG_RESOURCES` (si no existe esa hoja, toma la hoja activa).
+- **Columnas:** `TAG_ID` (col. A, debe llamarse exactamente así) + `Specifications`, `Handbook_Manual`, `Maintenance` (cualquiera de estas 3 puede faltar; las que existan se leen).
+- **Match:** una fila por TAG; `load_tag_resources()` (`excel_migrator.py`) empareja por el valor exacto de `TAG_ID` contra el `TAG` de cada ficha.
+- **Lo que cuenta como "hay recurso" es el HYPERLINK de la celda, no el texto.** `cell_hyperlink()` lee `cell.hyperlink.target` (lo que Excel guarda cuando insertás el link con `Ctrl+K` sobre la celda). Solo si no hay hyperlink, hace fallback a tomar el valor de la celda si literalmente empieza con `http://` o `https://`. **Escribir una URL como texto plano sin usar Ctrl+K puede no funcionar si no empieza con http(s)://** — siempre usar `Ctrl+K` para asignar el link.
+- Si una celda no tiene hyperlink ni URL en texto, ese botón simplemente no se renderiza para ese TAG (no hay error).
+- **Cómo se puebla/actualiza el archivo:** `generate_tag_resources_template.py` — crea `TAG_RESOURCES.xlsx` la primera vez (una fila por cada TAG de `plantilla_sitio.xlsx`, hoja `Datos`) o hace *merge* en corridas posteriores (agrega TAGs nuevos, preserva hyperlinks ya cargados a mano). Después de correrlo, la edición de los links es manual: abrir el archivo, seleccionar la celda del TAG/columna correspondiente, `Ctrl+K` → pegar URL.
+- Si `TAG_RESOURCES.xlsx` no existe en absoluto al correr `excel_migrator.py`, simplemente no se renderiza ninguno de los 3 botones (no es un error, solo un aviso en el log).
 
 ## Convert fichas → plantilla (paso 1)
 
@@ -198,8 +210,8 @@ Bajo `<output_dir>/`:
 ## Recuperación / troubleshooting
 
 - **Imágenes borradas en disco** (working tree) pero presentes en HEAD → `git checkout HEAD -- docs/assets/images/` las restaura. Pasó en mayo 2026 antes del cleanup defensivo. Alternativa: re-correr el migrator — `ensure_images()` las regenera desde la xlsx canonical si está disponible.
-- **Puerto 8000 ocupado al pulsar "Ver sitio"** → un `python3 -m http.server` huérfano de otra sesión. `pkill -f "http.server"` lo mata; la GUI ya lo detecta y notifica.
-- **El sitio en `localhost:8000` se ve viejo aunque regeneraste** → casi siempre es el preview server apuntando al destino anterior. La GUI lo reinicia al cambiar destino; verificar el log: `🚀 Lanzando preview en http://localhost:8000 desde <ruta>`.
+- **Puerto 8190 ocupado al pulsar "Ver sitio"** → un `python3 -m http.server` huérfano de otra sesión. `pkill -f "http.server"` lo mata; la GUI ya lo detecta y notifica.
+- **El sitio en `localhost:8190` se ve viejo aunque regeneraste** → casi siempre es el preview server apuntando al destino anterior. La GUI lo reinicia al cambiar destino; verificar el log: `🚀 Lanzando preview en http://localhost:8190 desde <ruta>`.
 - **El buscador no devuelve resultados al abrir el HTML con doble click** → ya no debería pasar. Si pasa: confirmar que el destino tiene `search-index.js` (no solo `.json`) y que el `<head>` lo carga con `<script src="search-index.js">`.
 - **El sitio sale con TAGs/propiedades del proyecto anterior** → la plantilla quedó vieja porque `convert_fichas` no corrió. Activá el switch **🔄 Forzar regeneración** en la GUI y asegurate de tener la xlsx nueva en raíz o subila por el widget.
 - **Solo 1 propiedad por TAG en la plantilla** → bug histórico del `extract_pairs` viejo (ventana de búsqueda muy corta). Resuelto en mayo 2026. Si vuelve a pasar con un layout nuevo: verificar que `is_valid_label` no esté rechazando los labels reales y que el value esté efectivamente en la fila (no en celda merged externa).
