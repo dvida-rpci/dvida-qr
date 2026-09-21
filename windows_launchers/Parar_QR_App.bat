@@ -3,7 +3,7 @@ REM ═════════════════════════�
 REM   Detener el aplicativo QR Groupe SEB (apaga la GUI y el preview)
 REM ═══════════════════════════════════════════════════════════════════
 
-echo Buscando procesos en :8080 y :8000...
+echo Buscando procesos en :8080 y :8190...
 
 REM Matar lo que escucha en puerto 8080 (GUI)
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080 ^| findstr LISTENING') do (
@@ -11,9 +11,9 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080 ^| findstr LISTENING') 
     taskkill /F /PID %%a >nul 2>&1
 )
 
-REM Matar lo que escucha en puerto 8000 (preview)
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do (
-    echo  · Matando PID %%a (puerto 8000 - preview)
+REM Matar lo que escucha en puerto 8190 (preview)
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8190 ^| findstr LISTENING') do (
+    echo  · Matando PID %%a (puerto 8190 - preview)
     taskkill /F /PID %%a >nul 2>&1
 )
 

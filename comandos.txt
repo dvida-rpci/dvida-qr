@@ -72,17 +72,17 @@ pkill -9 -f "python3 gui.py"
   4. PREVIEW LOCAL DEL SITIO (http.server)
 ───────────────────────────────────────────────────────────────────────
 
-# Servir docs/ en localhost:8000
-cd docs && python3 -m http.server 8000
+# Servir docs/ en localhost:8190 (la GUI usa este puerto fijo para "Ver sitio")
+cd docs && python3 -m http.server 8190
 
 # Servir otra carpeta sin moverse de cwd
-python3 -m http.server 8000 --directory /home/administrador/google-sites-migrator/docs
+python3 -m http.server 8190 --directory /home/administrador/google-sites-migrator/docs
 
-# Servir en otro puerto (si 8000 está ocupado)
+# Servir en otro puerto (si 8190 está ocupado)
 python3 -m http.server 8765 --directory docs/
 
 # Abrir el preview desde WSL
-cmd.exe /c start http://localhost:8000
+cmd.exe /c start http://localhost:8190
 
 # Detener el preview server
 pkill -f "http.server"
@@ -124,7 +124,7 @@ cat docs/migration_metadata.json | python3 -m json.tool | head -30
 find docs/assets/images -type f | wc -l
 
 # Verificar puertos ocupados
-ss -ltnp | grep -E ":8000|:8080"           # ambos a la vez
+ss -ltnp | grep -E ":8190|:8080"           # ambos a la vez
 lsof -i :8080                              # con más detalle
 
 # Verificar el sitio publicado online
@@ -173,7 +173,7 @@ python3 generate_excel_template.py
 ./update_site_from_excel.sh --push
 
 # Probar local antes de publicar
-python3 excel_migrator.py plantilla_sitio.xlsx docs/ && cd docs && python3 -m http.server 8000
+python3 excel_migrator.py plantilla_sitio.xlsx docs/ && cd docs && python3 -m http.server 8190
 
 # GUI rápida
 ./launch_gui.sh

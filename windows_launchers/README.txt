@@ -15,7 +15,7 @@
                                de WSL (Ubuntu).
 
   Parar_QR_App.bat             Detiene la GUI y el servidor de preview.
-                               Mata procesos en puertos :8080 y :8000.
+                               Mata procesos en puertos :8080 y :8190.
 
   Instalar_acceso_directo.bat  Crea un acceso directo "QR Groupe SEB"
                                en el Escritorio y opcionalmente lo
