@@ -2,3 +2,4 @@ nicegui
 openpyxl
 python-multipart
 supabase
+Pillow

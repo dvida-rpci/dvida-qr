@@ -31,6 +31,8 @@ from pathlib import Path
 
 from nicegui import app, ui
 
+import gui_maintenance
+
 # ─────────────────────────────────────────────────────────────────────────
 # Configuración
 # ─────────────────────────────────────────────────────────────────────────
@@ -446,6 +448,10 @@ with ui.column().classes("max-w-3xl mx-auto p-6 gap-4 w-full"):
 
         view_btn = ui.button("🌐 Ver sitio", on_click=lambda: open_preview())
         view_btn.props("color=secondary outline size=lg")
+
+        ui.button(
+            "🧰 Mantenimientos", on_click=gui_maintenance.open_maintenance_dialog
+        ).props("color=secondary outline size=lg")
 
     # ── Log ────────────────────────────────────────────────────────────
     ui.label("📋 Log").classes("font-semibold mt-2")
