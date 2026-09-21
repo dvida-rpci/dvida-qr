@@ -13,11 +13,16 @@ No tiene entrypoint propio — corre dentro del proceso de gui.py.
 
 from __future__ import annotations
 
+import asyncio
+import io
 import json
 import os
+import uuid
+from datetime import date
 from pathlib import Path
 
 from nicegui import ui
+from PIL import Image, ImageOps
 from supabase import create_client, Client
 
 from generate_tag_resources_template import read_tags_from_plantilla
@@ -26,6 +31,17 @@ REPO_ROOT = Path(__file__).parent
 SITE_CONFIG = REPO_ROOT / "site_config.json"
 
 MAX_ATTACHMENTS = 5
+BUCKET = "maintenance-attachments"
+MAX_FILE_BYTES = 10 * 1024 * 1024  # mismo tope que el bucket (migración de endurecimiento)
+# Audios que acepta el bucket; el sitio (maintenance.js) graba webm/mp4/ogg.
+AUDIO_MIME = {
+    ".webm": "audio/webm",
+    ".ogg": "audio/ogg",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/x-m4a",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+}
 
 
 def load_supabase_config() -> dict:
@@ -57,6 +73,126 @@ def friendly_error(e: Exception) -> str:
     if "row-level security" in low or "permission denied" in low:
         return "No tenés permiso para esta acción."
     return text
+
+
+def compress_image_bytes(raw_bytes: bytes) -> bytes:
+    """Redimensiona a max 1600px de ancho y recodifica a JPEG calidad 70 (mismo
+    criterio que la compresión client-side del sitio, Plan 2)."""
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw_bytes))).convert("RGB")
+    max_width = 1600
+    if img.width > max_width:
+        ratio = max_width / img.width
+        img = img.resize((max_width, int(img.height * ratio)))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=70)
+    return buf.getvalue()
+
+
+def _today_iso() -> str:
+    return date.today().isoformat()
+
+
+class AttachmentsPicker:
+    """Selector de adjuntos (fotos + audios desde archivo) para usar dentro de un diálogo.
+    `reserved` = adjuntos que el registro ya tiene (el tope de 5 es por registro)."""
+
+    def __init__(self, reserved: int = 0):
+        self.reserved = reserved
+        self.pending: list[dict] = []  # [{kind, data, mime, ext, name}]
+        self.summary = ui.label().classes("text-sm text-gray-600")
+        self.chips = ui.row().classes("gap-2 flex-wrap")
+        with ui.row().classes("w-full gap-4"):
+            self.photo_upload = ui.upload(
+                label="📷 Agregar foto", on_upload=self._on_photo, auto_upload=True
+            ).props('accept="image/*"').classes("flex-1")
+            self.audio_upload = ui.upload(
+                label="🎙️ Agregar audio", on_upload=self._on_audio, auto_upload=True
+            ).props('accept="audio/*"').classes("flex-1")
+        self._refresh()
+
+    def _full(self) -> bool:
+        return self.reserved + len(self.pending) >= MAX_ATTACHMENTS
+
+    def _refresh(self):
+        self.summary.text = f"Adjuntos: {self.reserved + len(self.pending)}/{MAX_ATTACHMENTS}"
+        self.chips.clear()
+        with self.chips:
+            for item in list(self.pending):
+                with ui.row().classes("items-center gap-1 bg-gray-100 rounded px-2"):
+                    icon = "📷" if item["kind"] == "photo" else "🎙️"
+                    ui.label(f"{icon} {item['name']}").classes("text-xs")
+                    ui.button(icon="close", on_click=lambda i=item: self._remove(i)).props(
+                        "flat dense round size=xs"
+                    )
+
+    def _remove(self, item: dict):
+        if item in self.pending:
+            self.pending.remove(item)
+        self._refresh()
+
+    async def _on_photo(self, e):
+        try:
+            if self._full():
+                ui.notify(f"Ya llegaste al máximo de {MAX_ATTACHMENTS} adjuntos", type="warning")
+                return
+            raw = await e.file.read()
+            # En un hilo: decodificar/recomprimir una foto grande no debe congelar la GUI.
+            data = await asyncio.to_thread(compress_image_bytes, raw)
+            self.pending.append(
+                {"kind": "photo", "data": data, "mime": "image/jpeg", "ext": "jpg", "name": e.file.name}
+            )
+            self._refresh()
+        except Exception as ex:
+            ui.notify(f"No se pudo procesar la foto: {ex}", type="negative")
+        finally:
+            self.photo_upload.reset()
+
+    async def _on_audio(self, e):
+        try:
+            if self._full():
+                ui.notify(f"Ya llegaste al máximo de {MAX_ATTACHMENTS} adjuntos", type="warning")
+                return
+            ext = Path(e.file.name).suffix.lower()
+            if ext not in AUDIO_MIME:
+                ui.notify(
+                    f"Formato de audio no soportado ({', '.join(AUDIO_MIME)})", type="negative"
+                )
+                return
+            raw = await e.file.read()
+            if len(raw) > MAX_FILE_BYTES:
+                ui.notify("El audio supera el máximo de 10 MB", type="negative")
+                return
+            self.pending.append(
+                {"kind": "audio", "data": raw, "mime": AUDIO_MIME[ext], "ext": ext[1:], "name": e.file.name}
+            )
+            self._refresh()
+        finally:
+            self.audio_upload.reset()
+
+
+def upload_attachments(client: Client, tag_id: str, record_id: str, items: list[dict]) -> list[str]:
+    """Sube los adjuntos uno por uno. Devuelve la lista de errores (vacía = todo bien);
+    los que subieron bien quedan asociados al registro aunque otros fallen."""
+    storage = client.storage.from_(BUCKET)
+    errors: list[str] = []
+    for item in items:
+        path = f"{tag_id}/{record_id}/{uuid.uuid4().hex}.{item['ext']}"
+        try:
+            storage.upload(path, item["data"], {"content-type": item["mime"]})
+        except Exception as e:
+            errors.append(f"{item['name']}: {friendly_error(e)}")
+            continue
+        try:
+            client.table("maintenance_attachments").insert(
+                {"record_id": record_id, "kind": item["kind"], "storage_path": path}
+            ).execute()
+        except Exception as e:
+            try:  # el archivo subió pero su fila no: se limpia para no dejar huérfanos
+                storage.remove([path])
+            except Exception:
+                pass
+            errors.append(f"{item['name']}: {friendly_error(e)}")
+    return errors
 
 
 def open_maintenance_dialog():
@@ -207,7 +343,7 @@ def build_maintenance_screen(content):
         with container:
             ui.button(
                 "+ Registrar mantenimiento",
-                on_click=lambda: ui.notify("Implementado en el Task 3", type="info"),
+                on_click=lambda: open_new_record_dialog(tag_id, container),
             ).props("color=primary")
             if not result.data:
                 ui.label("Todavía no hay mantenimientos registrados para este TAG.").classes(
@@ -249,5 +385,201 @@ def build_maintenance_screen(content):
                             ui.label(
                                 f"📎 {attachment['kind']} ({attachment['storage_path'].split('/')[-1]})"
                             ).classes("text-xs bg-gray-100 rounded px-2 py-1")
+                with ui.row().classes("gap-2 mt-2"):
+                    is_owner = record["created_by"] == session_state["user"].id
+                    is_oficina = session_state["role"] == "oficina"
+                    if is_owner or is_oficina:
+                        ui.button(
+                            "+ Comentario/adjunto",
+                            on_click=lambda r=record: open_add_comment_dialog(r, tag_id, container),
+                        ).props("flat dense")
+                    if is_oficina:
+                        ui.button(
+                            "Editar",
+                            on_click=lambda r=record: open_edit_dialog(r, tag_id, container),
+                        ).props("flat dense")
+                        ui.button(
+                            "Borrar",
+                            on_click=lambda r=record: confirm_delete(r, tag_id, container),
+                        ).props("flat dense color=red")
+
+
+    def _finish(dialog, container, tag_id: str, errors: list[str], ok_msg: str):
+        """Cierra el diálogo y recarga la lista. Si algún adjunto falló NO se deja reintentar
+        desde el mismo diálogo (re-subiría los que sí subieron o duplicaría el registro)."""
+        dialog.close()
+        if errors:
+            ui.notify(
+                f"{ok_msg}, pero {len(errors)} adjunto(s) no se pudieron subir: "
+                + "; ".join(errors)
+                + ". Podés agregarlos después con \"+ Comentario/adjunto\".",
+                type="warning",
+                multi_line=True,
+                close_button=True,
+                timeout=0,
+            )
+        else:
+            ui.notify(ok_msg, type="positive")
+        render_records(container, tag_id)
+
+    def open_new_record_dialog(tag_id: str, records_container):
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
+            ui.label(f"Registrar mantenimiento — {tag_id}").classes("text-lg font-semibold")
+
+            performed_at_input = ui.input("Fecha del mantenimiento", value=_today_iso()).props(
+                "outlined dense type=date"
+            ).classes("w-full")
+            type_select = ui.select(
+                {"preventivo": "Preventivo", "correctivo": "Correctivo"}, value="preventivo"
+            ).props("outlined dense").classes("w-full")
+            description_input = ui.textarea("Descripción").props("outlined dense").classes("w-full")
+            parts_input = ui.textarea("Repuestos / insumos (opcional)").props(
+                "outlined dense"
+            ).classes("w-full")
+            next_input = ui.input("Próximo programado (opcional)").props(
+                "outlined dense type=date"
+            ).classes("w-full")
+
+            picker = AttachmentsPicker()
+            error_label = ui.label("").classes("text-red-600 text-sm")
+
+            def submit():
+                error_label.text = ""
+                if (
+                    not performed_at_input.value
+                    or not type_select.value
+                    or not (description_input.value or "").strip()
+                ):
+                    error_label.text = "Completá fecha, tipo y descripción."
+                    return
+                save_btn.disable()
+                payload = {
+                    "tag_id": tag_id,
+                    "performed_at": performed_at_input.value,
+                    "type": type_select.value,
+                    "description": description_input.value.strip(),
+                    "parts_used": parts_input.value or None,
+                    "next_scheduled_at": next_input.value or None,
+                }
+                try:
+                    result = client.table("maintenance_records").insert(payload).execute()
+                    record_id = result.data[0]["id"]
+                except Exception as e:
+                    error_label.text = f"No se pudo guardar: {friendly_error(e)}"
+                    save_btn.enable()
+                    return
+                errors = upload_attachments(client, tag_id, record_id, picker.pending)
+                _finish(dialog, records_container, tag_id, errors, "Registro guardado")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat")
+                save_btn = ui.button("Guardar", on_click=submit).props("color=primary")
+
+        dialog.open()
+
+    def open_edit_dialog(record: dict, tag_id: str, records_container):
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
+            ui.label(f"Editar mantenimiento — {tag_id}").classes("text-lg font-semibold")
+            description_input = ui.textarea("Descripción", value=record["description"]).props(
+                "outlined dense"
+            ).classes("w-full")
+            parts_input = ui.textarea(
+                "Repuestos / insumos", value=record.get("parts_used") or ""
+            ).props("outlined dense").classes("w-full")
+            next_input = ui.input(
+                "Próximo programado", value=record.get("next_scheduled_at") or ""
+            ).props("outlined dense type=date").classes("w-full")
+            error_label = ui.label("").classes("text-red-600 text-sm")
+
+            def submit():
+                error_label.text = ""
+                if not (description_input.value or "").strip():
+                    error_label.text = "La descripción no puede quedar vacía."
+                    return
+                try:
+                    result = (
+                        client.table("maintenance_records")
+                        .update(
+                            {
+                                "description": description_input.value.strip(),
+                                "parts_used": parts_input.value or None,
+                                "next_scheduled_at": next_input.value or None,
+                            }
+                        )
+                        .eq("id", record["id"])
+                        .execute()
+                    )
+                    if not result.data:  # RLS no dejó tocar ninguna fila
+                        raise PermissionError("No tenés permiso para esta acción.")
+                except Exception as e:
+                    error_label.text = f"No se pudo editar: {friendly_error(e)}"
+                    return
+                ui.notify("Registro actualizado (la edición queda en auditoría)", type="positive")
+                dialog.close()
+                render_records(records_container, tag_id)
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat")
+                ui.button("Guardar", on_click=submit).props("color=primary")
+
+        dialog.open()
+
+    def confirm_delete(record: dict, tag_id: str, records_container):
+        with ui.dialog() as dialog, ui.card():
+            ui.label(f"¿Borrar el registro del {record['performed_at']}? Queda en auditoría.")
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat")
+
+                def do_delete():
+                    try:
+                        result = (
+                            client.table("maintenance_records")
+                            .delete()
+                            .eq("id", record["id"])
+                            .execute()
+                        )
+                        if not result.data:  # RLS no dejó borrar ninguna fila
+                            raise PermissionError("No tenés permiso para esta acción.")
+                    except Exception as e:
+                        ui.notify(f"No se pudo borrar: {friendly_error(e)}", type="negative")
+                        return
+                    dialog.close()
+                    ui.notify("Registro borrado", type="positive")
+                    render_records(records_container, tag_id)
+
+                ui.button("Borrar", on_click=do_delete).props("color=red")
+        dialog.open()
+
+    def open_add_comment_dialog(record: dict, tag_id: str, records_container):
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
+            ui.label("Agregar comentario/adjunto").classes("text-lg font-semibold")
+            body_input = ui.textarea("Comentario").props("outlined dense").classes("w-full")
+            picker = AttachmentsPicker(reserved=len(record.get("maintenance_attachments", [])))
+            error_label = ui.label("").classes("text-red-600 text-sm")
+
+            def submit():
+                error_label.text = ""
+                body = (body_input.value or "").strip()
+                if not body and not picker.pending:
+                    error_label.text = "Agregá un comentario o al menos un adjunto."
+                    return
+                save_btn.disable()
+                if body:
+                    try:
+                        client.table("maintenance_comments").insert(
+                            {"record_id": record["id"], "body": body}
+                        ).execute()
+                    except Exception as e:
+                        error_label.text = f"No se pudo guardar: {friendly_error(e)}"
+                        save_btn.enable()
+                        return
+                errors = upload_attachments(client, tag_id, record["id"], picker.pending)
+                _finish(dialog, records_container, tag_id, errors, "Guardado")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat")
+                save_btn = ui.button("Guardar", on_click=submit).props("color=primary")
+
+        dialog.open()
 
     render_login()
