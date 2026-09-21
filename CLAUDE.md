@@ -165,6 +165,13 @@ Ver [docs/superpowers/specs/2026-09-20-historico-mantenimientos-design.md](docs/
 - Para desarrollar/probar local: `supabase start` (requiere Docker) y usar la URL/key que imprime, no las de producción.
 - Desde el sitio solo el **autor** de un evento puede sumarle comentarios/adjuntos; editar/borrar (oficina) se hace desde `gui.py` (Plan 3).
 - Si la sesión expira a mitad de un submit, `maintenance.js` muestra un modal de re-login y reintenta solo (los datos del formulario no se pierden). Si Supabase no responde, solo la sección de historial muestra el error con "Reintentar"; la ficha sigue funcionando.
+- La pantalla de oficina vive en `gui_maintenance.py` y se abre desde el botón **🧰 Mantenimientos** de `gui.py` como **diálogo maximizado** (`open_maintenance_dialog()`); cada apertura arranca sin sesión. Usa las mismas cuentas y el mismo schema/RLS que el sitio — RLS es la única fuente de verdad, el cliente solo decide qué botones mostrar.
+- **No es una `@ui.page`**: NiceGUI 3.x lanza `RuntimeError` si se registra `ui.page` mientras la UI principal (`gui.py`) está en el scope global. Para tener rutas reales habría que mover toda la UI de `gui.py` a funciones de página o usar `ui.sub_pages`.
+- Conexión: variables de entorno `SUPABASE_URL` + `SUPABASE_ANON_KEY` (tienen prioridad; sirven para apuntar a `supabase start` sin tocar `site_config.json`) y, si no están, el bloque `supabase` de `site_config.json`.
+- Fotos: Pillow (1600px máx, JPEG q70, `exif_transpose`) en un hilo aparte para no congelar la GUI. Audio: solo archivos `.webm/.ogg/.mp4/.m4a/.mp3/.wav` (los MIME que acepta el bucket; máx 10 MB). Tope de 5 adjuntos por registro.
+- Si un adjunto falla al subir, el registro/comentario ya quedó guardado: se avisa y el diálogo se cierra (no hay reintento para no duplicar). Se agregan después con "+ Comentario/adjunto".
+- Al borrar un registro los archivos del bucket **no se eliminan** (quedan como evidencia junto al `maintenance_audit_log`); solo se borran las filas.
+- Sesión expirada en la GUI: el error se traduce a "Tu sesión expiró. Cerrá sesión y volvé a entrar." (sin modal de re-login: es app de escritorio, perder el formulario no es fricción real).
 - Límite conocido (preexistente, no del historial): a 360px el botón de búsqueda del banner desborda ~30px y aparece scroll horizontal de la página.
 
 ## Archivos generados por `excel_migrator.py`
@@ -249,6 +256,7 @@ Bajo `<output_dir>/`:
 | [comandos.txt](comandos.txt)                                             | ✅ Cheatsheet de comandos CLI por sección                                                                                                                           |
 | [New_Laptop.txt](New_Laptop.txt)                                         | ✅ Guía de instalación en laptop nuevo (Linux/Windows/macOS/WSL sin VSCode)                                                                                         |
 | [windows_launchers/](windows_launchers/)                                 | ✅ 4 `.bat` para Windows: lanzar (nativo/WSL), parar, instalar acceso directo + auto-arranque                                                                       |
+| [gui_maintenance.py](gui_maintenance.py)                                 | ✅ Pantalla "Mantenimientos" en gui.py (Plan 3) — diálogo maximizado con login, selector de TAG, alta/edición/borrado según rol |
 | [maintenance.js](maintenance.js), [maintenance.css](maintenance.css)   | ✅ Histórico de mantenimientos (Plan 2) — cliente Supabase, login, lectura/carga de historial, fotos+audio, comentarios, re-login por sesión expirada |
 | [supabase/migrations/](supabase/migrations/)                             | ✅ Schema + RLS + triggers + Storage del histórico de mantenimientos (Plan 1)                                                                                       |
 | [tests/supabase/](tests/supabase/)                                       | ✅ Suite pytest de RLS (40 tests, incl. `test_hardening.py`) — requiere `supabase start` (Docker) corriendo localmente; correr con `python3 -m pytest tests/supabase -v`                        |
