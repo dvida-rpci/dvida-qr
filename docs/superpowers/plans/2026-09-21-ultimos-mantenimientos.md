@@ -471,7 +471,7 @@ test('indexByTag indexa por TAG', () => {
 
 - [ ] **Step 2: Ejecutar y comprobar que falla**
 
-Run: `/home/administrador/.codegpt/bin/node --test tests/js/ 2>&1 | tail -8`
+Run: `/home/administrador/.codegpt/bin/node --test tests/js/*.test.js 2>&1 | tail -8`
 Expected: FAIL — `Cannot find module '../../maintenance_feed.js'`.
 
 - [ ] **Step 3: Implementar la lógica pura**
@@ -579,7 +579,7 @@ Crear `maintenance_feed.js`:
 
 - [ ] **Step 4: Ejecutar y comprobar que pasa**
 
-Run: `/home/administrador/.codegpt/bin/node --test tests/js/ 2>&1 | tail -12`
+Run: `/home/administrador/.codegpt/bin/node --test tests/js/*.test.js 2>&1 | tail -12`
 Expected: `# pass 14`, `# fail 0`.
 
 - [ ] **Step 5: Commit**
@@ -986,7 +986,7 @@ En `maintenance_feed.js`, reemplazar exactamente la línea `    // ── UI (DO
 
 - [ ] **Step 2: Los tests de lógica siguen pasando (la capa DOM no se carga en node)**
 
-Run: `/home/administrador/.codegpt/bin/node --test tests/js/ 2>&1 | tail -6 && /home/administrador/.codegpt/bin/node --check maintenance_feed.js && echo SINTAXIS_OK`
+Run: `/home/administrador/.codegpt/bin/node --test tests/js/*.test.js 2>&1 | tail -6 && /home/administrador/.codegpt/bin/node --check maintenance_feed.js && echo SINTAXIS_OK`
 Expected: `# pass 14`, `# fail 0` y `SINTAXIS_OK`.
 
 - [ ] **Step 3: Crear los estilos**
@@ -1701,7 +1701,7 @@ por:
 
 - [ ] **Step 5: Sintaxis y tests**
 
-Run: `/home/administrador/.codegpt/bin/node --check maintenance.js && echo SINTAXIS_OK && /home/administrador/.codegpt/bin/node --test tests/js/ 2>&1 | grep -E "^# (pass|fail)"`
+Run: `/home/administrador/.codegpt/bin/node --check maintenance.js && echo SINTAXIS_OK && /home/administrador/.codegpt/bin/node --test tests/js/*.test.js 2>&1 | grep -E "^# (pass|fail)"`
 Expected: `SINTAXIS_OK`, `# pass 14`, `# fail 0`.
 
 (La verificación de comportamiento va en la Task 6, en navegador.)
@@ -1931,7 +1931,7 @@ En la sección "Histórico de mantenimientos (Supabase)", agregar al final de la
 - **Lectura pública (desde 2026-09-21):** el histórico completo (registros, comentarios, adjuntos, autor) es legible sin sesión con la `anon_key`; la escritura sigue exigiendo login + perfil. Migración `20260921210000_public_read.sql`: una policy `select` `to anon, authenticated` por tabla y por el bucket, y la vista `author_names(user_id, full_name)` (sin correo ni rol; con `revoke all` a anon/authenticated + `grant select`, porque Supabase concede ALL por defecto y la vista sería escribible).
 - **Vista de últimos mantenimientos:** `mantenimientos.html` (generada por `excel_migrator.py`, lógica en `maintenance_feed.js/.css`). 10 más recientes por `performed_at desc`, "Mostrar más" de a 10, tabs Todos/EQUIPOS/TANQUES/INSTRUMENTOS y buscador por TAG o SERVICIO. La categoría no está en la base: el generador incrusta `window.__TAG_INDEX__` y el filtro consulta con `tag_id in (...)`. Popup de fotos/audio con ✕, Esc, flechas y swipe. Acceso: primer ítem del menú lateral y botón en el inicio.
 - **Historial de la ficha:** se lee sin login; el botón de alta y "+ Comentario/adjunto" solo aparecen con sesión (`Iniciar sesión para agregar`).
-- **Tests JS de la lógica pura:** `/home/administrador/.codegpt/bin/node --test tests/js/`. Tests del generador: `python3 -m pytest tests/test_generator_feed.py`.
+- **Tests JS de la lógica pura:** `/home/administrador/.codegpt/bin/node --test tests/js/*.test.js`. Tests del generador: `python3 -m pytest tests/test_generator_feed.py`.
 ```
 
 En la tabla "Archivos generados por `excel_migrator.py`" agregar la fila:
@@ -1947,7 +1947,7 @@ Y en "Cleanup whitelist" no hay que tocar el texto (la tabla ya lista los archiv
 Run:
 ```bash
 python3 -m pytest tests -q 2>&1 | tail -3
-/home/administrador/.codegpt/bin/node --test tests/js/ 2>&1 | grep -E "^# (pass|fail)"
+/home/administrador/.codegpt/bin/node --test tests/js/*.test.js 2>&1 | grep -E "^# (pass|fail)"
 ```
 Expected: pytest `56 passed` (50 RLS + 6 generador), node `# pass 14`, `# fail 0`.
 
