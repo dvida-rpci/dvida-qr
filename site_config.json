@@ -17,5 +17,9 @@
   },
   "logos": {
     "right_href": "https://www.alimentosdvida.com/"
+  },
+  "supabase": {
+    "url": "https://qgxvukllzuaiyhzegaef.supabase.co",
+    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFneHZ1a2xsenVhaXloemVnYWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NTE3NjcsImV4cCI6MjEwNTUyNzc2N30.5EpCMjiyFSeluWqRcSov3sxtG4wZNRt-GAmQYDdQUL8"
   }
 }

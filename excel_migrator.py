@@ -220,6 +220,10 @@ def load_site_config(path: Path) -> dict:
             "right_alt": LOGO_RIGHT_ALT,
             "right_href": LOGO_RIGHT_HREF,
         },
+        "supabase": {
+            "url": "",
+            "anon_key": "",
+        },
     }
     if not path.exists():
         print(f"   ℹ️  Sin site_config.json (usando tema por defecto)")
@@ -232,6 +236,8 @@ def load_site_config(path: Path) -> dict:
         cfg["theme"].update(user_cfg["theme"])
     if "logos" in user_cfg and isinstance(user_cfg["logos"], dict):
         cfg["logos"].update(user_cfg["logos"])
+    if "supabase" in user_cfg and isinstance(user_cfg["supabase"], dict):
+        cfg["supabase"].update(user_cfg["supabase"])
     print(f"🎨 Tema cargado de site_config.json")
     return cfg
 
@@ -426,6 +432,7 @@ def page_skeleton(
     sidebar_html: str,
     content_html: str,
     rel_prefix: str,
+    supabase_config: dict,
 ) -> str:
     """Skeleton HTML completo (head + banner + sidebar + content)."""
     return f"""<!DOCTYPE html>
@@ -436,6 +443,14 @@ def page_skeleton(
     <meta name="theme-color" content="{_MOBILE_THEME_COLOR}">
     <title>{h(page_title)} — {h(SITE_TITLE)}</title>
     <link rel="stylesheet" href="{rel_prefix}styles.css">
+    <link rel="stylesheet" href="{rel_prefix}maintenance.css">
+    <script>
+        window.__SUPABASE_CONFIG__ = {{
+            url: {json.dumps(supabase_config.get("url", ""))},
+            anonKey: {json.dumps(supabase_config.get("anon_key", ""))}
+        }};
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body data-rel="{rel_prefix}">
     <div class="sidebar-backdrop" aria-hidden="true"></div>
@@ -512,6 +527,7 @@ def page_skeleton(
     </div>
     <script src="{rel_prefix}search-index.js"></script>
     <script src="{rel_prefix}script.js"></script>
+    <script src="{rel_prefix}maintenance.js"></script>
 </body>
 </html>
 """
@@ -1856,6 +1872,7 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
     KNOWN_FILES = {
         "index.html", "README.md", "styles.css", "script.js", ".nojekyll",
         "migration_metadata.json", "search-index.json", "search-index.js", "urls.txt",
+        "maintenance.css", "maintenance.js",
     }
     if output_dir.exists():
         for fname in KNOWN_FILES:
@@ -1874,6 +1891,11 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
     final_css = STYLES_CSS + build_theme_override_css(config["theme"])
     (output_dir / "styles.css").write_text(final_css, encoding="utf-8")
     (output_dir / "script.js").write_text(SCRIPT_JS, encoding="utf-8")
+    # Histórico de mantenimientos: archivos estáticos propios (no embebidos en Python)
+    for static_name in ("maintenance.css", "maintenance.js"):
+        (output_dir / static_name).write_text(
+            (REPO_ROOT / static_name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
 
     # Icono genérico (fallback del thumbnail del botón "Ver imagen")
@@ -1890,6 +1912,7 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
         sidebar_html=sidebar_home,
         content_html=render_home(grouped),
         rel_prefix="",
+        supabase_config=config["supabase"],
     )
     (output_dir / "index.html").write_text(home_html, encoding="utf-8")
     print("   ✅ index.html")
@@ -1910,6 +1933,7 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
             sidebar_html=sidebar_cat,
             content_html=render_category_index(cat, cat_items),
             rel_prefix="../",
+            supabase_config=config["supabase"],
         )
         (cat_dir / "index.html").write_text(cat_index_html, encoding="utf-8")
 
@@ -1922,6 +1946,7 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
                 sidebar_html=sidebar_item,
                 content_html=render_item_page(item),
                 rel_prefix="../",
+                supabase_config=config["supabase"],
             )
             (cat_dir / item.filename).write_text(item_html, encoding="utf-8")
             total_items += 1
