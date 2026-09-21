@@ -2,7 +2,7 @@
 
 Sitio generado automáticamente desde `plantilla_sitio.xlsx`.
 
-- **Fecha:** 2026-09-21 15:45:52
+- **Fecha:** 2026-09-21 18:56:15
 - **TAGs publicados:** 42
 - **Categorías:** EQUIPOS, INSTRUMENTOS, TANQUES
 

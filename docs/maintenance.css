@@ -314,3 +314,43 @@
     flex-direction: column;
     gap: 10px;
 }
+
+/* Acceso a la vista de últimos mantenimientos (menú lateral e inicio) */
+.nav-feed {
+    margin-bottom: 8px;
+}
+
+.nav-link-feed {
+    display: block;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+}
+
+.nav-link-feed:hover,
+.nav-link-feed.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.home-feed-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.home-feed-cta:hover {
+    background: var(--accent-hover);
+}

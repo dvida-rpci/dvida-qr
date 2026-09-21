@@ -31,7 +31,7 @@
     function renderLoginForm(container, tagId) {
         container.innerHTML =
             '<form class="maint-login-form" id="maint-login-form">' +
-            '  <h2>Ingresá para ver o cargar el historial</h2>' +
+            '  <h2>Ingresá para cargar mantenimientos</h2>' +
             '  <label class="maint-field">Email' +
             '    <input type="email" name="email" required autocomplete="username">' +
             '  </label>' +
@@ -40,10 +40,14 @@
             '  </label>' +
             '  <div class="maint-login-error" id="maint-login-error" hidden></div>' +
             '  <button type="submit" class="maint-btn maint-btn-primary">Ingresar</button>' +
+            '  <button type="button" class="maint-btn maint-btn-secondary" id="maint-login-cancel">Cancelar</button>' +
             '</form>';
 
         var form = document.getElementById('maint-login-form');
         var errorBox = document.getElementById('maint-login-error');
+        document.getElementById('maint-login-cancel').addEventListener('click', function () {
+            initHistorialView(container, tagId);
+        });
 
         form.addEventListener('submit', function (evt) {
             evt.preventDefault();
@@ -75,17 +79,29 @@
             '<div class="maint-shell">' +
             '  <div class="maint-session-bar">' +
             '    <span class="maint-session-user"></span>' +
-            '    <button type="button" class="maint-btn maint-btn-secondary" id="maint-logout">Cerrar sesión</button>' +
+            '    <button type="button" class="maint-btn maint-btn-secondary" id="maint-logout"></button>' +
             '  </div>' +
             '  <div id="maint-historial-body">Cargando historial…</div>' +
             '</div>';
 
-        container.querySelector('.maint-session-user').textContent = session.user.email;
-        document.getElementById('maint-logout').addEventListener('click', function () {
-            getClient().auth.signOut().then(function () {
-                initHistorialView(container, tagId);
+        var userEl = container.querySelector('.maint-session-user');
+        var actionBtn = document.getElementById('maint-logout');
+        if (session) {
+            userEl.textContent = session.user.email;
+            actionBtn.textContent = 'Cerrar sesión';
+            actionBtn.addEventListener('click', function () {
+                getClient().auth.signOut().then(function () {
+                    initHistorialView(container, tagId);
+                });
             });
-        });
+        } else {
+            // El historial es público de lectura; el login se pide solo para agregar.
+            userEl.textContent = 'Solo lectura';
+            actionBtn.textContent = 'Iniciar sesión para agregar';
+            actionBtn.addEventListener('click', function () {
+                renderLoginForm(container, tagId);
+            });
+        }
 
         return document.getElementById('maint-historial-body');
     }
@@ -104,10 +120,6 @@
             .then(function (result) {
                 if (result.error) throw result.error;
                 var session = result.data.session;
-                if (!session) {
-                    renderLoginForm(container, tagId);
-                    return;
-                }
                 var body = renderLoggedInShell(container, tagId, session);
                 loadAndRenderRecords(body, tagId);
             })
@@ -255,7 +267,11 @@
         addBtn.type = 'button';
         addBtn.className = 'maint-btn maint-btn-primary maint-add-record-btn';
         addBtn.textContent = '+ Registrar mantenimiento';
+        addBtn.hidden = true;
         bodyContainer.appendChild(addBtn);
+        client.auth.getSession().then(function (result) {
+            addBtn.hidden = !(result.data && result.data.session);
+        });
 
         var formSlot = document.createElement('div');
         formSlot.className = 'maint-form-slot';
