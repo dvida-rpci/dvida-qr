@@ -27,6 +27,13 @@
     border-color: var(--accent);
 }
 
+/* El ✕ propio reemplaza al nativo de type="search" (evita verlo duplicado) */
+.feed-search input::-webkit-search-cancel-button,
+.feed-search input::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
 .feed-search-clear {
     position: absolute;
     right: 4px;
