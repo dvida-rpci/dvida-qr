@@ -278,3 +278,11 @@
     color: var(--text-muted);
     min-height: 1.2em;
 }
+
+.maint-add-comment-btn {
+    margin-top: 8px;
+}
+
+.maint-comment-form {
+    margin-top: 10px;
+}

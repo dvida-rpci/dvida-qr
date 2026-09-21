@@ -166,7 +166,7 @@
         return wrapper;
     }
 
-    function renderRecord(client, record) {
+    function renderRecord(client, record, onChange) {
         var el = document.createElement('article');
         el.className = 'maint-record';
 
@@ -208,6 +208,23 @@
         var attachmentsBox = el.querySelector('.maint-record-attachments');
         (record.maintenance_attachments || []).forEach(function (attachment) {
             attachmentsBox.appendChild(renderAttachment(client, attachment));
+        });
+
+        // Solo el autor del evento puede sumarle comentarios/adjuntos desde el sitio
+        // (oficina edita/borra desde gui.py, Plan 3).
+        var addBox = el.querySelector('.maint-record-add');
+        client.auth.getSession().then(function (result) {
+            var session = result.data.session;
+            if (session && session.user.id === record.created_by) {
+                var addLink = document.createElement('button');
+                addLink.type = 'button';
+                addLink.className = 'maint-btn maint-btn-secondary maint-add-comment-btn';
+                addLink.textContent = '+ Agregar comentario/adjunto';
+                addLink.addEventListener('click', function () {
+                    renderAddCommentForm(client, record, addBox, addLink, onChange);
+                });
+                addBox.appendChild(addLink);
+            }
         });
 
         return el;
@@ -264,7 +281,9 @@
         var list = document.createElement('div');
         list.className = 'maint-list';
         records.forEach(function (record) {
-            list.appendChild(renderRecord(client, record));
+            list.appendChild(renderRecord(client, record, function () {
+                loadAndRenderRecords(bodyContainer, tagId);
+            }));
         });
         bodyContainer.appendChild(list);
     }
@@ -637,6 +656,85 @@
                 submitBtn.disabled = false;
                 statusBox.textContent = '';
                 errorBox.textContent = 'No se pudo guardar (los datos siguen en el formulario): ' + err.message;
+                errorBox.hidden = false;
+            });
+        });
+    }
+
+    function renderAddCommentForm(client, record, container, triggerBtn, onDone) {
+        triggerBtn.hidden = true;
+
+        var formEl = document.createElement('form');
+        formEl.className = 'maint-form maint-comment-form';
+        formEl.innerHTML =
+            '<label class="maint-field">Comentario' +
+            '  <textarea name="body" rows="2"></textarea>' +
+            '</label>' +
+            '<div class="maint-attachments-editor"></div>' +
+            '<div class="maint-form-error" hidden></div>' +
+            '<div class="maint-form-status"></div>' +
+            '<div class="maint-form-buttons">' +
+            '  <button type="submit" class="maint-btn maint-btn-primary">Agregar</button>' +
+            '  <button type="button" class="maint-btn maint-btn-secondary" data-action="cancel">Cancelar</button>' +
+            '</div>';
+        container.appendChild(formEl);
+
+        var editor = createAttachmentsEditor(
+            formEl.querySelector('.maint-attachments-editor'),
+            (record.maintenance_attachments || []).length
+        );
+        var errorBox = formEl.querySelector('.maint-form-error');
+        var statusBox = formEl.querySelector('.maint-form-status');
+        var commentSaved = false; // evita duplicar el comentario si solo falla la subida de adjuntos
+
+        formEl.querySelector('[data-action="cancel"]').addEventListener('click', function () {
+            formEl.remove();
+            triggerBtn.hidden = false;
+        });
+
+        formEl.addEventListener('submit', function (evt) {
+            evt.preventDefault();
+            var body = formEl.elements.body.value.trim();
+            var pending = editor.getPending();
+            errorBox.hidden = true;
+
+            if (editor.isRecording()) {
+                errorBox.textContent = 'Detené la grabación de audio antes de guardar.';
+                errorBox.hidden = false;
+                return;
+            }
+            if (!body && pending.length === 0) {
+                errorBox.textContent = 'Agregá un comentario o al menos un adjunto.';
+                errorBox.hidden = false;
+                return;
+            }
+
+            var submitBtn = formEl.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            statusBox.textContent = 'Guardando…';
+
+            var chain = Promise.resolve();
+            if (body && !commentSaved) {
+                chain = client.from('maintenance_comments').insert({ record_id: record.id, body: body }).then(function (result) {
+                    if (result.error) throw result.error;
+                    commentSaved = true;
+                });
+            }
+            chain.then(function () {
+                return uploadAllAttachments(client, record.tag_id, record.id, pending, statusBox);
+            }).then(function (uploadResults) {
+                var failed = uploadResults.filter(function (r) { return r !== 'ok'; });
+                // El botón queda deshabilitado a propósito: reintentar re-subiría los adjuntos que sí subieron.
+                if (failed.length > 0) {
+                    statusBox.textContent = 'Guardado, pero ' + failed.length + ' adjunto(s) no se pudieron subir. Podés agregarlos de nuevo.';
+                } else {
+                    statusBox.textContent = 'Guardado.';
+                }
+                setTimeout(onDone, failed.length > 0 ? 3500 : 500);
+            }).catch(function (err) {
+                submitBtn.disabled = false;
+                statusBox.textContent = '';
+                errorBox.textContent = 'No se pudo guardar: ' + err.message;
                 errorBox.hidden = false;
             });
         });
