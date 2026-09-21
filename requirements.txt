@@ -1,0 +1,4 @@
+nicegui
+openpyxl
+python-multipart
+supabase
