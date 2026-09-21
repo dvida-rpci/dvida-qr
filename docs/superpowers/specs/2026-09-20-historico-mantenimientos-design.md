@@ -14,7 +14,7 @@ Hoy el sitio muestra fichas técnicas estáticas por TAG (generadas desde Excel)
 
 ```
 Ficha del TAG (HTML/JS estático, GitHub Pages)
-   └── Sección "Historial de Mantenimiento" (nueva, visible solo logueado)
+   └── Botón "Ver/agregar historial de mantenimiento" (nuevo, junto a "Ver ficha técnica" arriba de la página; el contenido del historial requiere login)
          └── Supabase JS SDK (browser) ──┐
                                           ├──> Supabase (Postgres + Auth + Storage)
 gui.py (NiceGUI, oficina)                │
@@ -115,16 +115,25 @@ Implementación: una función `is_oficina()` (consulta `profiles.role` para `aut
 
 ## Indicador de anomalía por fecha
 
-`maintenance_records.is_date_anomaly` (columna generada, ver arriba) se muestra como un badge/ícono de alerta (⚠️) junto al evento — tanto en el acordeón del sitio como en la tabla de `gui.py`, visible para ambos roles (es información, no una acción restringida). Se dispara cuando `|created_at − performed_at| > 2 días`, en cualquier dirección (registro tardío o fecha de mantenimiento futura respecto al registro — ambos casos tratados como la misma señal de posible anomalía de procedimiento).
+`maintenance_records.is_date_anomaly` (columna generada, ver arriba) se muestra como un badge/ícono de alerta (⚠️) junto al evento — tanto en la sección de historial del sitio como en la tabla de `gui.py`, visible para ambos roles (es información, no una acción restringida). Se dispara cuando `|created_at − performed_at| > 2 días`, en cualquier dirección (registro tardío o fecha de mantenimiento futura respecto al registro — ambos casos tratados como la misma señal de posible anomalía de procedimiento).
 
 No se agrega un filtro/reporte dedicado de anomalías en fase 1 (no fue pedido), pero al ser una columna calculada, agregar ese filtro después es un simple `WHERE is_date_anomaly`, sin rediseño.
 
 ## Flujos
 
+### Landing al abrir la ficha (QR o navegación normal)
+
+La URL de la ficha no cambia (no impacta `urls.txt` ni la generación del migrator — el QR sigue apuntando exactamente a donde apunta hoy). Lo que cambia es el encabezado de la página: arriba de todo aparecen **dos botones grandes, del mismo tamaño**, siempre visibles:
+
+- **"Ver ficha técnica"** — muestra el contenido actual de la ficha (acordeones de propiedades, documentos, imágenes). **Es la vista por defecto al abrir la página** — se preserva el comportamiento de hoy, sin clicks extra, porque es el caso de uso más frecuente.
+- **"Ver/agregar historial de mantenimiento"** — toggle que oculta la ficha técnica y muestra la sección de historial (gated por login, como se describe abajo). Al volver a tocar "Ver ficha técnica" se puede alternar de nuevo.
+
+Ambos botones son igual de prominentes (no hay jerarquía visual que esconda el historial); el que cambia es solo cuál contenido se muestra por default al cargar la página.
+
 ### Técnico (mobile, desde el QR)
 
-1. Escanea QR → llega a la ficha del TAG (como hoy).
-2. Acordeón "Historial de Mantenimiento" pide login si no hay sesión (form email/password, pantalla completa en mobile).
+1. Escanea QR → llega a la ficha del TAG (como hoy), con la ficha técnica visible por defecto y el botón "Ver/agregar historial de mantenimiento" igual de visible arriba.
+2. Toca "Ver/agregar historial de mantenimiento" → si no hay sesión, pide login (form email/password, pantalla completa en mobile).
 3. Logueado: ve lista cronológica descendente de eventos (fecha, tipo, descripción, comentarios, adjuntos con badge de anomalía si aplica) + botón "**+ Registrar mantenimiento**".
 4. Formulario de carga: fecha (default hoy), tipo (radio grande, táctil), descripción, repuestos, próximo programado (opcional), hasta 5 adjuntos (fotos vía `capture="environment"` o audio grabado in-browser).
 5. En cada evento propio, botón "+ Agregar comentario/adjunto" → formulario reducido (texto y/o adjuntos), respetando el tope acumulado de 5.
