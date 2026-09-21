@@ -155,6 +155,18 @@ Archivo opcional en la raíz; sobrescribe defaults sin tocar Python. Schema:
 - El `accent` también se usa para `<meta theme-color>` (barra del navegador móvil).
 - La GUI escribe este archivo automáticamente al pulsar **Generar** (deriva los 10 vars desde el color base usando `colorsys` + luminancia WCAG para el `banner_text`).
 
+## Histórico de mantenimientos (Supabase)
+
+Ver [docs/superpowers/specs/2026-09-20-historico-mantenimientos-design.md](docs/superpowers/specs/2026-09-20-historico-mantenimientos-design.md) para el diseño completo. Resumen operativo:
+
+- Todo el código vive en `maintenance.js`/`maintenance.css` (no en `excel_migrator.py` — ese archivo solo inyecta la config y los `<link>/<script>` tags).
+- La config de conexión (`url`/`anon_key`) vive en `site_config.json` → bloque `supabase`. La `anon_key` es pública a propósito (protegida por RLS), pero la `service_role key` **nunca** va acá ni al repo.
+- Schema, RLS, triggers de auditoría y Storage: ver `supabase/migrations/` (Plan 1 del feature).
+- Para desarrollar/probar local: `supabase start` (requiere Docker) y usar la URL/key que imprime, no las de producción.
+- Desde el sitio solo el **autor** de un evento puede sumarle comentarios/adjuntos; editar/borrar (oficina) se hace desde `gui.py` (Plan 3).
+- Si la sesión expira a mitad de un submit, `maintenance.js` muestra un modal de re-login y reintenta solo (los datos del formulario no se pierden). Si Supabase no responde, solo la sección de historial muestra el error con "Reintentar"; la ficha sigue funcionando.
+- Límite conocido (preexistente, no del historial): a 360px el botón de búsqueda del banner desborda ~30px y aparece scroll horizontal de la página.
+
 ## Archivos generados por `excel_migrator.py`
 
 Bajo `<output_dir>/`:
@@ -237,6 +249,7 @@ Bajo `<output_dir>/`:
 | [comandos.txt](comandos.txt)                                             | ✅ Cheatsheet de comandos CLI por sección                                                                                                                           |
 | [New_Laptop.txt](New_Laptop.txt)                                         | ✅ Guía de instalación en laptop nuevo (Linux/Windows/macOS/WSL sin VSCode)                                                                                         |
 | [windows_launchers/](windows_launchers/)                                 | ✅ 4 `.bat` para Windows: lanzar (nativo/WSL), parar, instalar acceso directo + auto-arranque                                                                       |
+| [maintenance.js](maintenance.js), [maintenance.css](maintenance.css)   | ✅ Histórico de mantenimientos (Plan 2) — cliente Supabase, login, lectura/carga de historial, fotos+audio, comentarios, re-login por sesión expirada |
 | [supabase/migrations/](supabase/migrations/)                             | ✅ Schema + RLS + triggers + Storage del histórico de mantenimientos (Plan 1)                                                                                       |
 | [tests/supabase/](tests/supabase/)                                       | ✅ Suite pytest de RLS (40 tests, incl. `test_hardening.py`) — requiere `supabase start` (Docker) corriendo localmente; correr con `python3 -m pytest tests/supabase -v`                        |
 | `NI00011 Fichas Técnicas_Equipos STARnD GROUP SEB V3.xlsx`               | ✅ Source xlsx actual en raíz                                                                                                                                       |
