@@ -118,6 +118,8 @@ GENERIC_IMAGE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 2
 
 # Orden fijo de las categorías en el sitio
 CATEGORY_ORDER = ["EQUIPOS", "INSTRUMENTOS", "TANQUES"]
+# Orden de los tabs de la página de mantenimientos (distinto al del menú lateral)
+FEED_TAB_ORDER = ["EQUIPOS", "TANQUES", "INSTRUMENTOS"]
 
 # Forma singular usada en exports (urls.txt) — el sitio sigue mostrando los plurales
 CATEGORY_SINGULAR = {
@@ -402,9 +404,20 @@ def group_by_category(items: list[Item]) -> dict[str, list[Item]]:
     return grouped
 
 
-def build_nav(grouped: dict[str, list[Item]], rel_prefix: str, active_tag: Optional[str] = None) -> str:
+def build_nav(
+    grouped: dict[str, list[Item]],
+    rel_prefix: str,
+    active_tag: Optional[str] = None,
+    feed_active: bool = False,
+) -> str:
     """Construye el <nav> del sidebar con paths relativos según ubicación."""
     out = ['<nav class="nav"><ul class="nav-list">']
+    # Fuera de .nav-group a propósito: script.js recorre los .nav-group esperando un .nav-cat
+    feed_cls = "nav-link-feed active" if feed_active else "nav-link-feed"
+    out.append(
+        f'<li class="nav-feed"><a class="{feed_cls}" '
+        f'href="{rel_prefix}mantenimientos.html">🛠 Últimos mantenimientos</a></li>'
+    )
     for cat in CATEGORY_ORDER:
         items = grouped.get(cat, [])
         if not items:
@@ -433,6 +446,8 @@ def page_skeleton(
     content_html: str,
     rel_prefix: str,
     supabase_config: dict,
+    extra_head: str = "",
+    extra_scripts: str = "",
 ) -> str:
     """Skeleton HTML completo (head + banner + sidebar + content)."""
     return f"""<!DOCTYPE html>
@@ -451,6 +466,7 @@ def page_skeleton(
         }};
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    {extra_head}
 </head>
 <body data-rel="{rel_prefix}">
     <div class="sidebar-backdrop" aria-hidden="true"></div>
@@ -528,6 +544,7 @@ def page_skeleton(
     <script src="{rel_prefix}search-index.js"></script>
     <script src="{rel_prefix}script.js"></script>
     <script src="{rel_prefix}maintenance.js"></script>
+    {extra_scripts}
 </body>
 </html>
 """
@@ -536,10 +553,54 @@ def page_skeleton(
 # ─────────────────────────────────────────────────────────────────────────
 # Renderizado de cada tipo de página
 # ─────────────────────────────────────────────────────────────────────────
+def render_maintenance_page(items: list[Item]) -> str:
+    """Página pública de últimos mantenimientos (la arma maintenance_feed.js en runtime)."""
+    tag_index = [
+        {
+            "tag": i.tag,
+            "categoria": i.category,
+            "servicio": (i.properties.get("SERVICIO") or "").strip(),
+            "filename": i.filename,
+        }
+        for i in sorted(items, key=lambda i: i.tag)
+    ]
+    # "</" dentro de un <script> cerraría la etiqueta antes de tiempo
+    index_json = json.dumps(tag_index, ensure_ascii=False).replace("</", "<\\/")
+
+    tabs = [
+        '<button type="button" class="feed-tab active" role="tab" data-cat="TODOS" '
+        'aria-selected="true" tabindex="0">Todos</button>'
+    ]
+    for cat in FEED_TAB_ORDER:
+        tabs.append(
+            f'<button type="button" class="feed-tab" role="tab" data-cat="{h(cat)}" '
+            f'aria-selected="false" tabindex="-1">{h(cat)}</button>'
+        )
+
+    return "\n".join([
+        '<header class="page-header"><h1>Últimos mantenimientos</h1>',
+        '<p class="subtitle">Los mantenimientos más recientes de todos los equipos</p></header>',
+        '<div class="feed-controls">',
+        '<div class="feed-search">',
+        '<input type="search" id="feed-search" placeholder="Buscar por TAG o elemento…" '
+        'autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Buscar mantenimientos por TAG o elemento">',
+        '<button type="button" class="feed-search-clear" id="feed-search-clear" hidden aria-label="Limpiar búsqueda">✕</button>',
+        '</div>',
+        '<div class="feed-tabs" role="tablist" aria-label="Categoría">',
+        *tabs,
+        '</div>',
+        '</div>',
+        '<div class="feed-list" id="feed-list" aria-live="polite"></div>',
+        '<div class="feed-more"><button type="button" class="maint-btn maint-btn-secondary" id="feed-more" hidden>Mostrar más</button></div>',
+        f'<script>window.__TAG_INDEX__ = {index_json};</script>',
+    ])
+
+
 def render_home(grouped: dict[str, list[Item]]) -> str:
     parts = [
         f'<header class="page-header"><h1>{h(SITE_TITLE)}</h1>',
         f'<p class="subtitle">{h(SITE_SUBTITLE)}</p></header>',
+        '<a class="home-feed-cta" href="mantenimientos.html">🛠 Ver últimos mantenimientos →</a>',
         '<div class="accordion">',
     ]
     for cat in CATEGORY_ORDER:
@@ -1888,6 +1949,7 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
         "index.html", "README.md", "styles.css", "script.js", ".nojekyll",
         "migration_metadata.json", "search-index.json", "search-index.js", "urls.txt",
         "maintenance.css", "maintenance.js",
+        "maintenance_feed.css", "maintenance_feed.js", "mantenimientos.html",
     }
     if output_dir.exists():
         for fname in KNOWN_FILES:
@@ -1907,7 +1969,7 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
     (output_dir / "styles.css").write_text(final_css, encoding="utf-8")
     (output_dir / "script.js").write_text(SCRIPT_JS, encoding="utf-8")
     # Histórico de mantenimientos: archivos estáticos propios (no embebidos en Python)
-    for static_name in ("maintenance.css", "maintenance.js"):
+    for static_name in ("maintenance.css", "maintenance.js", "maintenance_feed.css", "maintenance_feed.js"):
         (output_dir / static_name).write_text(
             (REPO_ROOT / static_name).read_text(encoding="utf-8"), encoding="utf-8"
         )
@@ -1931,6 +1993,20 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
     )
     (output_dir / "index.html").write_text(home_html, encoding="utf-8")
     print("   ✅ index.html")
+
+    # Página pública de últimos mantenimientos
+    feed_html = page_skeleton(
+        page_title="Últimos mantenimientos",
+        topbar_title="Últimos mantenimientos",
+        sidebar_html=build_nav(grouped, rel_prefix="", feed_active=True),
+        content_html=render_maintenance_page(items),
+        rel_prefix="",
+        supabase_config=config["supabase"],
+        extra_head='<link rel="stylesheet" href="maintenance_feed.css">',
+        extra_scripts='<script src="maintenance_feed.js"></script>',
+    )
+    (output_dir / "mantenimientos.html").write_text(feed_html, encoding="utf-8")
+    print("   ✅ mantenimientos.html")
 
     # Páginas por categoría y por item
     total_items = 0
