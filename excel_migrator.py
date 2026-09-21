@@ -609,6 +609,15 @@ def render_item_page(item: Item) -> str:
         f'<a href="index.html">{h(item.category)}</a> / '
         f'<span>{h(item.tag)}</span></p>',
         '</header>',
+        # Toggle ficha técnica / historial de mantenimiento (lo conmuta maintenance.js)
+        '<div class="view-toggle" role="tablist">',
+        '<button type="button" class="view-toggle-btn active" id="btn-ver-ficha" '
+        'role="tab" aria-selected="true" aria-controls="ficha-view">Ver ficha técnica</button>',
+        '<button type="button" class="view-toggle-btn" id="btn-ver-historial" '
+        'role="tab" aria-selected="false" aria-controls="historial-view">'
+        'Ver/agregar historial de mantenimiento</button>',
+        '</div>',
+        '<div id="ficha-view" role="tabpanel">',
     ]
 
     # Galería de imágenes (si el TAG tiene)
@@ -678,6 +687,12 @@ def render_item_page(item: Item) -> str:
                 f'target="_blank" rel="noopener">{h(label)} ↗</a></li>'
             )
         parts.append('</ul></section>')
+
+    parts.append('</div>')  # cierre ficha-view
+    # Vacío a propósito: todo su contenido lo arma maintenance.js en runtime
+    parts.append(
+        f'<div id="historial-view" role="tabpanel" data-tag="{h(item.tag)}" hidden></div>'
+    )
 
     return "\n".join(parts)
 
