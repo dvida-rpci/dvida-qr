@@ -545,6 +545,46 @@
         return uploadOne(0).then(function () { return results; });
     }
 
+    function isAuthExpired(err) {
+        return !!err && (err.status === 401 || err.code === 'PGRST301' ||
+            (err.message && err.message.toLowerCase().indexOf('jwt') !== -1));
+    }
+
+    function showReloginModal(onSuccess) {
+        var overlay = document.createElement('div');
+        overlay.className = 'maint-modal-overlay';
+        overlay.innerHTML =
+            '<div class="maint-modal" role="dialog" aria-modal="true">' +
+            '  <h3>Tu sesión expiró</h3>' +
+            '  <p>Iniciá sesión de nuevo — lo que ya escribiste no se pierde.</p>' +
+            '  <form id="maint-relogin-form">' +
+            '    <label class="maint-field">Email<input type="email" name="email" required autocomplete="username"></label>' +
+            '    <label class="maint-field">Contraseña<input type="password" name="password" required autocomplete="current-password"></label>' +
+            '    <div class="maint-login-error" hidden></div>' +
+            '    <button type="submit" class="maint-btn maint-btn-primary">Ingresar</button>' +
+            '  </form>' +
+            '</div>';
+        document.body.appendChild(overlay);
+
+        var form = overlay.querySelector('#maint-relogin-form');
+        var errorBox = overlay.querySelector('.maint-login-error');
+        form.addEventListener('submit', function (evt) {
+            evt.preventDefault();
+            errorBox.hidden = true;
+            getClient().auth.signInWithPassword({
+                email: form.elements.email.value.trim(),
+                password: form.elements.password.value
+            }).then(function (result) {
+                if (result.error) throw result.error;
+                overlay.remove();
+                onSuccess();
+            }).catch(function (err) {
+                errorBox.textContent = err.message;
+                errorBox.hidden = false;
+            });
+        });
+    }
+
     function renderNewRecordForm(container, tagId, onDone) {
         var draft = loadDraft(tagId) || {};
 
@@ -655,6 +695,12 @@
             }).catch(function (err) {
                 submitBtn.disabled = false;
                 statusBox.textContent = '';
+                if (isAuthExpired(err)) {
+                    showReloginModal(function () {
+                        form.dispatchEvent(new Event('submit', { cancelable: true }));
+                    });
+                    return;
+                }
                 errorBox.textContent = 'No se pudo guardar (los datos siguen en el formulario): ' + err.message;
                 errorBox.hidden = false;
             });
@@ -734,6 +780,12 @@
             }).catch(function (err) {
                 submitBtn.disabled = false;
                 statusBox.textContent = '';
+                if (isAuthExpired(err)) {
+                    showReloginModal(function () {
+                        formEl.dispatchEvent(new Event('submit', { cancelable: true }));
+                    });
+                    return;
+                }
                 errorBox.textContent = 'No se pudo guardar: ' + err.message;
                 errorBox.hidden = false;
             });
