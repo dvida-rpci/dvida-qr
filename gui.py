@@ -11,7 +11,7 @@ El usuario puede:
 - Subir el archivo de fichas técnicas crudas (.xlsx) → convert_fichas.
 - Subir TAG_RESOURCES.xlsx → enlaces de Specifications / Handbook / Maintenance.
 - Pulsar "Generar sitio" para correr el pipeline completo.
-- Pulsar "Ver sitio" para abrir el sitio en un servidor local (puerto 8000).
+- Pulsar "Ver sitio" para abrir el sitio en un servidor local (puerto 8190).
 
 Ejecutar:
     python3 gui.py
@@ -41,7 +41,7 @@ TAG_RESOURCES = REPO_ROOT / "TAG_RESOURCES.xlsx"
 FICHAS_DEFAULT_NAME = "fichas_source.xlsx"
 
 GUI_PORT = 8080
-PREVIEW_PORT = 8000
+PREVIEW_PORT = 8190
 
 # Servir el repo root como estático para previsualizar logo
 app.add_static_files("/files", str(REPO_ROOT))
