@@ -6,6 +6,14 @@
     <meta name="theme-color" content="#20c975">
     <title>100-TK-01 - Homogenización ARnD — QR PTAR D&#x27;Vida Itagüi</title>
     <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="../maintenance.css">
+    <script>
+        window.__SUPABASE_CONFIG__ = {
+            url: "https://qgxvukllzuaiyhzegaef.supabase.co",
+            anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFneHZ1a2xsenVhaXloemVnYWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NTE3NjcsImV4cCI6MjEwNTUyNzc2N30.5EpCMjiyFSeluWqRcSov3sxtG4wZNRt-GAmQYDdQUL8"
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body data-rel="../">
     <div class="sidebar-backdrop" aria-hidden="true"></div>
@@ -139,6 +147,11 @@
 <header class="page-header"><h1>100-TK-01 - Homogenización ARnD</h1>
 <p class="breadcrumb"><a href="../index.html">Inicio</a> / <a href="index.html">TANQUES</a> / <span>100-TK-01</span></p>
 </header>
+<div class="view-toggle" role="tablist">
+<button type="button" class="view-toggle-btn active" id="btn-ver-ficha" role="tab" aria-selected="true" aria-controls="ficha-view">Ver ficha técnica</button>
+<button type="button" class="view-toggle-btn" id="btn-ver-historial" role="tab" aria-selected="false" aria-controls="historial-view">Ver/agregar historial de mantenimiento</button>
+</div>
+<div id="ficha-view" role="tabpanel">
 <button class="gallery-btn" data-images="[&quot;../assets/images/100-TK-01/1.png&quot;]" data-tag="100-TK-01"><img class="gallery-btn-thumb" src="../assets/images/100-TK-01/1.png" alt="" loading="lazy" onerror="this.onerror=null;this.src='../assets/icons/generic-image.svg'"><span class="gallery-btn-label">Ver imagen</span></button>
 <div class="accordion">
 <div class="acc-item">
@@ -184,10 +197,13 @@
 <button class="acc-header" aria-expanded="false"><span class="acc-title">MATERIAL</span><span class="acc-chevron" aria-hidden="true">›</span></button>
 <div class="acc-body"><p>PRFV</p></div></div>
 </div>
+</div>
+<div id="historial-view" role="tabpanel" data-tag="100-TK-01" hidden></div>
             </article>
         </main>
     </div>
     <script src="../search-index.js"></script>
     <script src="../script.js"></script>
+    <script src="../maintenance.js"></script>
 </body>
 </html>
