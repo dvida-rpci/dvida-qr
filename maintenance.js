@@ -269,6 +269,379 @@
         bodyContainer.appendChild(list);
     }
 
+    // ── Carga de mantenimientos (Task 5) ─────────────────────────────────
+
+    var MAX_ATTACHMENTS = 5;
+    var MAX_AUDIO_SECONDS = 60;
+    var DRAFT_KEY_PREFIX = 'maint-draft-';
+    // Tipos que acepta el bucket (ver migración de endurecimiento); el resto se rechaza en el servidor.
+    var AUDIO_EXT = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
+
+    // "audio/webm;codecs=opus" -> "audio/webm" (el bucket compara el tipo sin parámetros)
+    function baseMime(mime) {
+        return (mime || '').split(';')[0].trim();
+    }
+
+    function todayLocalISO() {
+        // toISOString() da la fecha UTC: en Colombia (UTC-5) después de las 19:00 ya sería "mañana".
+        var d = new Date();
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var dd = String(d.getDate()).padStart(2, '0');
+        return d.getFullYear() + '-' + mm + '-' + dd;
+    }
+
+    function compressImage(file) {
+        return new Promise(function (resolve, reject) {
+            var img = new Image();
+            var reader = new FileReader();
+            reader.onerror = reject;
+            reader.onload = function () {
+                img.onerror = function () { reject(new Error('formato de imagen no soportado')); };
+                img.onload = function () {
+                    var maxWidth = 1600;
+                    var scale = Math.min(1, maxWidth / img.width);
+                    var canvas = document.createElement('canvas');
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob(function (blob) {
+                        if (!blob) { reject(new Error('No se pudo comprimir la imagen')); return; }
+                        resolve(blob);
+                    }, 'image/jpeg', 0.7);
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function pickAudioMime() {
+        if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
+        var candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+        for (var i = 0; i < candidates.length; i++) {
+            if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+        }
+        return '';
+    }
+
+    function createAudioRecorder(onStop) {
+        var recorder = null;
+        var chunks = [];
+        var timerId = null;
+
+        function stop() {
+            if (recorder && recorder.state !== 'inactive') recorder.stop();
+        }
+
+        function start(onTick) {
+            // Promise.resolve().then: si mediaDevices no existe (http fuera de localhost) el error
+            // sale como rechazo y no como excepción síncrona.
+            return Promise.resolve().then(function () {
+                return navigator.mediaDevices.getUserMedia({ audio: true });
+            }).then(function (stream) {
+                chunks = [];
+                var mime = pickAudioMime();
+                recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+                recorder.ondataavailable = function (e) {
+                    if (e.data && e.data.size > 0) chunks.push(e.data);
+                };
+                recorder.onstop = function () {
+                    stream.getTracks().forEach(function (track) { track.stop(); });
+                    clearInterval(timerId);
+                    // Se usa el tipo real que grabó el navegador (Safari/iOS graba mp4, no webm).
+                    var type = baseMime(recorder.mimeType) || 'audio/webm';
+                    onStop(new Blob(chunks, { type: type }));
+                };
+                recorder.start();
+                var seconds = 0;
+                timerId = setInterval(function () {
+                    seconds += 1;
+                    if (onTick) onTick(seconds);
+                    if (seconds >= MAX_AUDIO_SECONDS) stop();
+                }, 1000);
+            });
+        }
+
+        return { start: start, stop: stop };
+    }
+
+    // Editor de adjuntos reutilizable (fotos + audio). `reserved` = adjuntos que el registro ya tiene.
+    function createAttachmentsEditor(root, reserved) {
+        var pending = []; // [{kind: 'photo'|'audio', blob: Blob}]
+        var recorder = null;
+        var recording = false;
+        var starting = false;
+
+        root.innerHTML =
+            '<div class="maint-attachments-preview"></div>' +
+            '<div class="maint-attachments-actions">' +
+            '  <label class="maint-btn maint-btn-secondary maint-file-btn">📷 Agregar foto' +
+            '    <input type="file" accept="image/*" capture="environment" hidden>' +
+            '  </label>' +
+            '  <button type="button" class="maint-btn maint-btn-secondary" data-action="audio">🎙️ Grabar audio</button>' +
+            '</div>' +
+            '<div class="maint-form-error" hidden></div>';
+
+        var preview = root.querySelector('.maint-attachments-preview');
+        var photoInput = root.querySelector('input[type="file"]');
+        var photoLabel = root.querySelector('.maint-file-btn');
+        var audioBtn = root.querySelector('[data-action="audio"]');
+        var errorBox = root.querySelector('.maint-form-error');
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.hidden = false;
+        }
+
+        function full() {
+            return (reserved || 0) + pending.length >= MAX_ATTACHMENTS;
+        }
+
+        function renderPreview() {
+            preview.innerHTML = '';
+            pending.forEach(function (item, idx) {
+                var chip = document.createElement('span');
+                chip.className = 'maint-attachment-chip';
+                chip.textContent = (item.kind === 'photo' ? '📷 foto' : '🎙️ audio') + ' ';
+                var removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.setAttribute('aria-label', 'Quitar adjunto');
+                removeBtn.textContent = '✕';
+                removeBtn.addEventListener('click', function () {
+                    pending.splice(idx, 1);
+                    renderPreview();
+                });
+                chip.appendChild(removeBtn);
+                preview.appendChild(chip);
+            });
+            photoInput.disabled = full();
+            photoLabel.classList.toggle('is-disabled', full());
+            if (!recording) audioBtn.disabled = full();
+        }
+
+        photoInput.addEventListener('change', function () {
+            var file = photoInput.files[0];
+            photoInput.value = '';
+            errorBox.hidden = true;
+            if (!file || full()) return;
+            compressImage(file).then(function (blob) {
+                pending.push({ kind: 'photo', blob: blob });
+                renderPreview();
+            }).catch(function (err) {
+                showError('No se pudo procesar la foto: ' + err.message);
+            });
+        });
+
+        // Un único handler: el primer toque inicia la grabación, el siguiente la detiene.
+        audioBtn.addEventListener('click', function () {
+            if (recording) { recorder.stop(); return; }
+            if (starting || full()) return;
+            errorBox.hidden = true;
+            starting = true;
+            recorder = createAudioRecorder(function (blob) {
+                pending.push({ kind: 'audio', blob: blob });
+                recording = false;
+                audioBtn.textContent = '🎙️ Grabar audio';
+                renderPreview();
+            });
+            recorder.start(function (seconds) {
+                audioBtn.textContent = '⏺ Grabando… (' + seconds + 's) — tocar para detener';
+            }).then(function () {
+                starting = false;
+                recording = true;
+                audioBtn.textContent = '⏺ Grabando… (0s) — tocar para detener';
+            }).catch(function (err) {
+                starting = false;
+                recording = false;
+                audioBtn.textContent = '🎙️ Grabar audio';
+                showError('No se pudo acceder al micrófono: ' + err.message);
+            });
+        });
+
+        renderPreview();
+
+        return {
+            getPending: function () { return pending; },
+            isRecording: function () { return recording || starting; },
+            showError: showError
+        };
+    }
+
+    function saveDraft(tagId, fields) {
+        try {
+            localStorage.setItem(DRAFT_KEY_PREFIX + tagId, JSON.stringify(fields));
+        } catch (e) { /* localStorage lleno o deshabilitado: el draft es best-effort, no bloquea */ }
+    }
+
+    function loadDraft(tagId) {
+        try {
+            var raw = localStorage.getItem(DRAFT_KEY_PREFIX + tagId);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function clearDraft(tagId) {
+        try {
+            localStorage.removeItem(DRAFT_KEY_PREFIX + tagId);
+        } catch (e) { /* no-op */ }
+    }
+
+    function uploadPendingAttachment(client, tagId, recordId, pending) {
+        var mime = baseMime(pending.blob.type) || (pending.kind === 'photo' ? 'image/jpeg' : 'audio/webm');
+        var ext = pending.kind === 'photo' ? 'jpg' : (AUDIO_EXT[mime] || 'webm');
+        var path = tagId + '/' + recordId + '/' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.' + ext;
+        var storage = client.storage.from('maintenance-attachments');
+
+        return storage.upload(path, pending.blob, { contentType: mime }).then(function (result) {
+            if (result.error) throw result.error;
+            return client.from('maintenance_attachments').insert({
+                record_id: recordId,
+                kind: pending.kind,
+                storage_path: path
+            });
+        }).then(function (result) {
+            if (result.error) {
+                // El archivo subió pero su fila no: se borra (best-effort) para no dejar huérfanos.
+                // Si el rol no puede borrar (técnico), queda; es inofensivo y no aparece en el historial.
+                storage.remove([path]);
+                throw result.error;
+            }
+        });
+    }
+
+    function uploadAllAttachments(client, tagId, recordId, pendingList, statusEl) {
+        var results = [];
+
+        function uploadOne(index) {
+            if (index >= pendingList.length) return Promise.resolve();
+            statusEl.textContent = 'Subiendo adjunto ' + (index + 1) + ' de ' + pendingList.length + '…';
+            return uploadPendingAttachment(client, tagId, recordId, pendingList[index])
+                .then(function () { results[index] = 'ok'; })
+                .catch(function (err) { results[index] = 'error: ' + err.message; })
+                .then(function () { return uploadOne(index + 1); });
+        }
+
+        return uploadOne(0).then(function () { return results; });
+    }
+
+    function renderNewRecordForm(container, tagId, onDone) {
+        var draft = loadDraft(tagId) || {};
+
+        container.innerHTML =
+            '<form class="maint-form" id="maint-new-record-form">' +
+            '  <label class="maint-field">Fecha del mantenimiento' +
+            '    <input type="date" name="performed_at" required>' +
+            '  </label>' +
+            '  <fieldset class="maint-field">' +
+            '    <legend>Tipo</legend>' +
+            '    <label class="maint-radio"><input type="radio" name="type" value="preventivo" required> Preventivo</label>' +
+            '    <label class="maint-radio"><input type="radio" name="type" value="correctivo"> Correctivo</label>' +
+            '  </fieldset>' +
+            '  <label class="maint-field">Descripción' +
+            '    <textarea name="description" required rows="3"></textarea>' +
+            '  </label>' +
+            '  <label class="maint-field">Repuestos / insumos (opcional)' +
+            '    <textarea name="parts_used" rows="2"></textarea>' +
+            '  </label>' +
+            '  <label class="maint-field">Próximo mantenimiento programado (opcional)' +
+            '    <input type="date" name="next_scheduled_at">' +
+            '  </label>' +
+            '  <div class="maint-attachments-editor" id="maint-attachments-editor"></div>' +
+            '  <div class="maint-form-error" id="maint-form-error" hidden></div>' +
+            '  <div class="maint-form-status" id="maint-form-status"></div>' +
+            '  <div class="maint-form-buttons">' +
+            '    <button type="submit" class="maint-btn maint-btn-primary">Guardar</button>' +
+            '    <button type="button" class="maint-btn maint-btn-secondary" id="maint-cancel-btn">Cancelar</button>' +
+            '  </div>' +
+            '</form>';
+
+        var form = document.getElementById('maint-new-record-form');
+        form.elements.performed_at.value = draft.performed_at || todayLocalISO();
+        if (draft.type) form.elements.type.value = draft.type;
+        form.elements.description.value = draft.description || '';
+        form.elements.parts_used.value = draft.parts_used || '';
+        form.elements.next_scheduled_at.value = draft.next_scheduled_at || '';
+
+        function currentFields() {
+            return {
+                performed_at: form.elements.performed_at.value,
+                type: form.elements.type.value,
+                description: form.elements.description.value,
+                parts_used: form.elements.parts_used.value,
+                next_scheduled_at: form.elements.next_scheduled_at.value
+            };
+        }
+
+        Array.prototype.forEach.call(form.elements, function (el) {
+            if (el.name) el.addEventListener('input', function () { saveDraft(tagId, currentFields()); });
+        });
+
+        var editor = createAttachmentsEditor(document.getElementById('maint-attachments-editor'), 0);
+        var errorBox = document.getElementById('maint-form-error');
+        var statusBox = document.getElementById('maint-form-status');
+
+        document.getElementById('maint-cancel-btn').addEventListener('click', function () {
+            container.innerHTML = '';
+        });
+
+        form.addEventListener('submit', function (evt) {
+            evt.preventDefault();
+            errorBox.hidden = true;
+
+            if (!form.elements.type.value) {
+                errorBox.textContent = 'Elegí el tipo de mantenimiento.';
+                errorBox.hidden = false;
+                return;
+            }
+            if (editor.isRecording()) {
+                errorBox.textContent = 'Detené la grabación de audio antes de guardar.';
+                errorBox.hidden = false;
+                return;
+            }
+
+            var fields = currentFields();
+            saveDraft(tagId, fields);
+
+            var submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            statusBox.textContent = 'Guardando registro…';
+
+            var client = getClient();
+            var payload = {
+                tag_id: tagId,
+                performed_at: fields.performed_at,
+                type: fields.type,
+                description: fields.description,
+                parts_used: fields.parts_used || null,
+                next_scheduled_at: fields.next_scheduled_at || null
+            };
+
+            client.from('maintenance_records').insert(payload).select().then(function (result) {
+                if (result.error) throw result.error;
+                var recordId = result.data[0].id;
+                // Desde acá el registro ya existe: un fallo posterior NO debe permitir re-enviar (duplicaría).
+                clearDraft(tagId);
+                return uploadAllAttachments(client, tagId, recordId, editor.getPending(), statusBox);
+            }).then(function (uploadResults) {
+                var failed = uploadResults.filter(function (r) { return r !== 'ok'; });
+                if (failed.length > 0) {
+                    statusBox.textContent = 'Registro guardado, pero ' + failed.length + ' adjunto(s) no se pudieron subir. Podés agregarlos después desde "Agregar comentario/adjunto".';
+                } else {
+                    statusBox.textContent = 'Registro guardado.';
+                }
+                // El botón queda deshabilitado a propósito: el formulario se reemplaza al recargar la lista.
+                setTimeout(onDone, failed.length > 0 ? 3500 : 800);
+            }).catch(function (err) {
+                submitBtn.disabled = false;
+                statusBox.textContent = '';
+                errorBox.textContent = 'No se pudo guardar (los datos siguen en el formulario): ' + err.message;
+                errorBox.hidden = false;
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         var btnFicha = document.getElementById('btn-ver-ficha');
         var btnHistorial = document.getElementById('btn-ver-historial');

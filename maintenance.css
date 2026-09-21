@@ -186,3 +186,95 @@
 .maint-empty {
     color: var(--text-muted);
 }
+
+.maint-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 12px;
+    background: var(--bg);
+}
+
+.maint-form textarea {
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+    resize: vertical;
+}
+
+.maint-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 16px;
+    font-size: 0.95rem;
+}
+
+.maint-attachments-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.maint-attachments-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.maint-attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--bg-alt);
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.maint-attachment-chip button {
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.maint-attachments-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.maint-file-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.maint-file-btn.is-disabled,
+.maint-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.maint-form-error {
+    color: #b42318;
+    font-size: 0.85rem;
+}
+
+.maint-form-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.maint-form-status {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-height: 1.2em;
+}
