@@ -104,3 +104,85 @@
 .maint-loading {
     color: var(--text-muted);
 }
+
+.maint-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.maint-record {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    background: var(--bg);
+}
+
+.maint-record-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.maint-record-date {
+    font-weight: 700;
+}
+
+.maint-record-type {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg-alt);
+    color: var(--text-muted);
+}
+
+.maint-badge-anomaly {
+    font-size: 0.8rem;
+    color: #b42318;
+    font-weight: 600;
+}
+
+.maint-record-description {
+    margin: 6px 0;
+}
+
+.maint-record-parts,
+.maint-record-next {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 2px 0;
+}
+
+.maint-comment {
+    font-size: 0.9rem;
+    padding: 6px 10px;
+    background: var(--bg-alt);
+    border-radius: 8px;
+    margin: 4px 0;
+}
+
+.maint-record-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.maint-attachment-thumb {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.maint-add-record-btn {
+    margin-bottom: 8px;
+}
+
+.maint-empty {
+    color: var(--text-muted);
+}
