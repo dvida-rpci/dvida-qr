@@ -21,17 +21,19 @@ def service_client() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
-def _recreate_test_user(service_client: Client, email: str, role: str) -> str:
-    existing = service_client.auth.admin.list_users()
-    for user in existing:
-        if user.email == email:
-            service_client.auth.admin.delete_user(user.id)
-
-    result = service_client.auth.admin.create_user(
-        {"email": email, "password": TEST_PASSWORD, "email_confirm": True}
+def _ensure_test_user(service_client: Client, email: str, role: str) -> str:
+    # Se reutiliza el usuario si ya existe: borrarlo falla por los FK
+    # (created_by, changed_by) de los registros que dejaron corridas previas.
+    # Los tests se aíslan con random_tag_id, no con usuarios nuevos.
+    user_id = next(
+        (u.id for u in service_client.auth.admin.list_users() if u.email == email), None
     )
-    user_id = result.user.id
-    service_client.table("profiles").insert(
+    if user_id is None:
+        result = service_client.auth.admin.create_user(
+            {"email": email, "password": TEST_PASSWORD, "email_confirm": True}
+        )
+        user_id = result.user.id
+    service_client.table("profiles").upsert(
         {"user_id": user_id, "full_name": f"Test {role}", "role": role}
     ).execute()
     return user_id
@@ -39,8 +41,8 @@ def _recreate_test_user(service_client: Client, email: str, role: str) -> str:
 
 @pytest.fixture(scope="session")
 def seed_test_users(service_client: Client) -> dict[str, str]:
-    tecnico_id = _recreate_test_user(service_client, TECNICO_EMAIL, "tecnico")
-    oficina_id = _recreate_test_user(service_client, OFICINA_EMAIL, "oficina")
+    tecnico_id = _ensure_test_user(service_client, TECNICO_EMAIL, "tecnico")
+    oficina_id = _ensure_test_user(service_client, OFICINA_EMAIL, "oficina")
     return {"tecnico": tecnico_id, "oficina": oficina_id}
 
 
