@@ -2,7 +2,8 @@
 
 1. created_at no puede ser falseado por el cliente (rompía is_date_anomaly).
 2. Un usuario autenticado sin fila en profiles (p. ej. alguien que se auto-registra
-   con el anon key público) no ve ni escribe nada.
+   con el anon key público) puede LEER (el histórico es público desde 2026-09-21)
+   pero no escribe nada.
 3. El bucket limita tamaño y tipo MIME.
 """
 import datetime
@@ -71,16 +72,16 @@ def test_created_at_sent_by_client_is_ignored(tecnico_client, random_tag_id):
     assert row["is_date_anomaly"] is True
 
 
-# ── 2. Usuario sin profile no accede a nada ──────────────────────────────
+# ── 2. Usuario sin profile: lee (todo es público) pero no escribe ──────────────────────────────
 
 
-def test_outsider_cannot_select_records(tecnico_client, outsider_client, random_tag_id):
+def test_outsider_can_read_records(tecnico_client, outsider_client, random_tag_id):
     tecnico_client.table("maintenance_records").insert(_record(random_tag_id)).execute()
 
     response = (
         outsider_client.table("maintenance_records").select("*").eq("tag_id", random_tag_id).execute()
     )
-    assert response.data == []
+    assert len(response.data) == 1
 
 
 def test_outsider_cannot_insert_record(outsider_client, random_tag_id):
@@ -88,7 +89,7 @@ def test_outsider_cannot_insert_record(outsider_client, random_tag_id):
         outsider_client.table("maintenance_records").insert(_record(random_tag_id)).execute()
 
 
-def test_outsider_cannot_select_attachments_or_comments(
+def test_outsider_can_read_attachments_and_comments(
     tecnico_client, outsider_client, random_tag_id
 ):
     record_id = (
@@ -106,18 +107,17 @@ def test_outsider_cannot_select_attachments_or_comments(
 
     comments = outsider_client.table("maintenance_comments").select("*").eq("record_id", record_id).execute()
     attachments = outsider_client.table("maintenance_attachments").select("*").eq("record_id", record_id).execute()
-    assert comments.data == []
-    assert attachments.data == []
+    assert len(comments.data) == 1
+    assert len(attachments.data) == 1
 
 
-def test_outsider_cannot_upload_or_read_storage(tecnico_client, outsider_client, random_tag_id):
+def test_outsider_can_download_but_not_upload_storage(tecnico_client, outsider_client, random_tag_id):
     path = f"{random_tag_id}/test/outsider.jpg"
     tecnico_client.storage.from_(BUCKET).upload(
         path, b"contenido-de-prueba", {"content-type": "image/jpeg"}
     )
 
-    with pytest.raises(StorageException):
-        outsider_client.storage.from_(BUCKET).download(path)
+    assert outsider_client.storage.from_(BUCKET).download(path) == b"contenido-de-prueba"
     with pytest.raises(StorageException):
         outsider_client.storage.from_(BUCKET).upload(
             f"{random_tag_id}/test/outsider-up.jpg",

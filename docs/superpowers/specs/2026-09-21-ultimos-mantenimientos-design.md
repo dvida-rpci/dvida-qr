@@ -36,7 +36,8 @@ Archivo nuevo en `supabase/migrations/` (timestamp posterior a `20260921180723`)
    - `public.maintenance_comments`
    - `storage.objects` con `bucket_id = 'maintenance-attachments'` (necesario para `createSignedUrl` con `anon`).
 2. Vista `public.author_names (user_id, full_name)` sobre `public.profiles`, con `security_invoker = false` (corre con los permisos del dueño para saltar `profiles_select_own`), y `grant select` a `anon` y `authenticated`. Solo esas dos columnas.
-3. Las políticas `select_member` existentes para `authenticated` se conservan (un usuario logueado sigue leyendo; no se rompe nada). Al haber una política `anon` no hace falta cambiarlas.
+3. Las políticas `select_member` se **reemplazan** por una única política `select` `to anon, authenticated`; conservarlas haría que un usuario logueado sin perfil viera menos que un visitante anónimo.
+4. `revoke all` sobre `author_names` a `anon`/`authenticated` y `grant select` solo: Supabase concede ALL por defecto y una vista simple es auto-actualizable (sin el revoke, anon podría escribir en `profiles`).
 
 La consulta del cliente une registros con `author_names` (por `created_by = user_id`) en un segundo `select` y combina en el navegador, para no depender de relaciones entre tabla y vista en PostgREST.
 
@@ -72,7 +73,7 @@ Modal propio de la vista (no reutiliza el `#lightbox` de las fichas porque este 
 
 - Botón **✕**, tecla **Esc** y clic en el fondo cierran.
 - Flechas **‹ ›**, teclas ← → y swipe táctil (≥50 px) navegan entre los adjuntos **del mismo registro**. Con un solo adjunto las flechas se ocultan (clase `.single`, igual que el lightbox actual).
-- Foto → `<img>`; audio → `<audio controls>`. Las URLs se piden con `createSignedUrl` (1 h) al abrir el popup.
+- Foto → `<img>`; audio → `<audio controls>`. Las URLs firmadas (1 h) se piden en lote con `createSignedUrls` al renderizar cada página de resultados; el popup no hace peticiones.
 - Bloquea el scroll del fondo mientras está abierto y devuelve el foco al elemento que lo abrió.
 
 ## Historial dentro de la ficha (cambio en `maintenance.js`)

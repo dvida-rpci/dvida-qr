@@ -16,7 +16,7 @@
 - Commits terminan con la línea `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`.
 - `node` no está en el PATH: usar `/home/administrador/.codegpt/bin/node` (v22).
 - Tests de RLS: `python3 -m pytest tests/supabase -v` (requiere el stack local `supabase start`, ya corriendo; `.env.test` existe).
-- Las migraciones locales se aplican con `supabase db query --local -f <archivo>` (el historial local de migraciones no está sincronizado; **no** usar `supabase migration up` ni `db reset`).
+- Las migraciones locales se aplican con `psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -1 -f <archivo>` (el historial local de migraciones no está sincronizado; **no** usar `supabase migration up` ni `db reset`; `supabase db query -f` NO sirve: rechaza archivos con varias sentencias).
 - **Nunca** aplicar nada a producción (`qgxvukllzuaiyhzegaef`) sin confirmación explícita del usuario (Task 7).
 - No commitear `.claude/`, `.mcp.json`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `GUIA_GUI_QR_DEPLOY.txt` (sin seguimiento a propósito).
 
@@ -265,8 +265,8 @@ grant select on public.author_names to anon, authenticated;
 
 - [ ] **Step 4: Aplicar en el stack local y ejecutar los tests nuevos**
 
-Run: `supabase db query --local -f supabase/migrations/20260921210000_public_read.sql 2>&1 | tail -5`
-Expected: sin errores (JSON con `rows: []`).
+Run: `psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/20260921210000_public_read.sql 2>&1 | tail -12`
+Expected: `DROP POLICY`/`CREATE POLICY` x4, `CREATE VIEW`, `ALTER VIEW`, `REVOKE`, `GRANT`, sin errores.
 
 Run: `python3 -m pytest tests/supabase/test_public_read.py -v 2>&1 | tail -20`
 Expected: 10 passed.
