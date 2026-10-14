@@ -103,7 +103,7 @@ Pedido del usuario: poder **programar mantenimientos a mano** y que el sistema *
 
 `public.maintenance_manual_schedule`
 - `id uuid pk`, `tag_id text not null`, `activity_id uuid references maintenance_activities` (null = mantenimiento libre, fuera de la sábana), `scheduled_for date not null`, `note text`, `status text not null default 'pendiente' check (status in ('pendiente','reemplazado','cancelado'))`, `replaced_by uuid references maintenance_manual_schedule`, `created_by uuid not null default auth.uid()`, `created_at timestamptz default now()`.
-- **Se cumple solo:** un manual pendiente deja de mostrarse cuando se registra un mantenimiento de ese TAG con `performed_at >= created_at::date` (con esa actividad, si la tiene; cualquier registro, si es libre). No se borra: queda como historia.
+- **Se cumple solo:** un manual pendiente deja de mostrarse cuando se **carga** un registro de ese TAG después de programarlo (`created_at` posterior; con esa actividad, si la tiene; cualquier registro, si es libre). No se borra: queda como historia.
 - RLS: lectura pública; crear y cancelar: `oficina`.
 
 ### Agenda unificada: vista `public.maintenance_agenda`
@@ -143,7 +143,7 @@ La pestaña **Programación** de la GUI y la pestaña **Programados** de `manten
 - **Próxima semana** y **Próximas 4 semanas**.
 - **Todo**.
 
-Cada fila muestra el TAG (con link a su ficha en el sitio), el servicio, la actividad, la fecha, el origen (automático, manual o registro) y, en los automáticos, si la fecha sale de horas o de semanas. Se combinan con los tabs de categoría y el buscador existentes. Desde la GUI, una fila se puede **reprogramar a mano** (abre `schedule_manual` con la advertencia de arriba).
+Cada fila muestra el TAG (con link a su ficha en el sitio), el servicio, la actividad, la fecha, el estado y el origen (automático, manual o registro). Se combinan con los tabs de categoría y el buscador existentes. Desde la GUI, una fila se puede **reprogramar a mano** (abre `schedule_manual` con la advertencia de arriba).
 
 ## Biblioteca `sabana_base.xlsx` (raíz del repo, versionada)
 

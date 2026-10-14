@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import date, timedelta
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill
@@ -230,3 +231,48 @@ def export_library(classes: list[EquipmentClass], activities: list[Activity], pa
         [a.class_code, a.code, a.name, a.interval_hours, a.interval_weeks] for a in activities
     ])
     wb.save(path)
+
+
+# ── Agenda (vista maintenance_agenda) ──────────────────────────────────────
+
+AGENDA_FILTERS = {
+    "semana": "Esta semana",
+    "atrasados": "Atrasados",
+    "proxima": "Próxima semana",
+    "4semanas": "Próximas 4 semanas",
+    "todo": "Todo",
+}
+OVERDUE = ("vencido", "sin_registro")
+
+
+def week_bounds(today: date, offset_weeks: int = 0) -> tuple[date, date]:
+    """Lunes y domingo de la semana de `today` (desplazada `offset_weeks`)."""
+    monday = today - timedelta(days=today.weekday()) + timedelta(weeks=offset_weeks)
+    return monday, monday + timedelta(days=6)
+
+
+def filter_agenda(rows: list[dict], mode: str, today: date) -> list[dict]:
+    """Filas de maintenance_agenda para un filtro rápido. Los atrasados (vencido o
+    sin registro) se incluyen en "semana", "4semanas" y "todo", siempre primero."""
+    def due(row):
+        return date.fromisoformat(row["due_date"]) if row.get("due_date") else None
+
+    def in_range(row, start, end):
+        return due(row) is not None and start <= due(row) <= end
+
+    overdue = [r for r in rows if r["status"] in OVERDUE]
+    upcoming = [r for r in rows if r["status"] not in OVERDUE]
+    if mode == "atrasados":
+        selected = overdue
+    elif mode == "semana":
+        start, end = week_bounds(today)
+        selected = overdue + [r for r in upcoming if in_range(r, start, end)]
+    elif mode == "proxima":
+        start, end = week_bounds(today, 1)
+        selected = [r for r in upcoming if in_range(r, start, end)]
+    elif mode == "4semanas":
+        selected = overdue + [r for r in upcoming if in_range(r, today, today + timedelta(days=27))]
+    else:
+        selected = list(rows)
+    return sorted(selected, key=lambda r: (
+        r["status"] not in OVERDUE, r["status"] == "sin_registro", due(r) or date.max, r["tag_id"]))

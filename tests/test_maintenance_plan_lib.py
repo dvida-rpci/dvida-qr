@@ -7,6 +7,8 @@ from maintenance_plan import (
     EquipmentClass,
     LibraryError,
     detect_pairs,
+    filter_agenda,
+    week_bounds,
     export_library,
     load_library,
     load_plantilla_tags,
@@ -163,3 +165,30 @@ def test_export_library_ida_y_vuelta(tmp_path):
     classes, activities = load_library("sabana_base.xlsx")
     export_library(classes, activities, tmp_path / "exportada.xlsx")
     assert load_library(tmp_path / "exportada.xlsx") == (classes, activities)
+
+
+def test_week_bounds_lunes_a_domingo():
+    from datetime import date
+    assert week_bounds(date(2026, 10, 14)) == (date(2026, 10, 12), date(2026, 10, 18))
+    assert week_bounds(date(2026, 10, 14), 1) == (date(2026, 10, 19), date(2026, 10, 25))
+
+
+AGENDA = [
+    {"tag_id": "B", "due_date": "2026-10-16", "status": "proximo"},
+    {"tag_id": "A", "due_date": "2026-10-20", "status": "proximo"},
+    {"tag_id": "C", "due_date": None, "status": "sin_registro"},
+    {"tag_id": "D", "due_date": "2026-10-01", "status": "vencido"},
+    {"tag_id": "E", "due_date": "2026-12-07", "status": "al_dia"},
+]
+
+
+@pytest.mark.parametrize("mode, tags", [
+    ("semana", ["D", "C", "B"]),
+    ("atrasados", ["D", "C"]),
+    ("proxima", ["A"]),
+    ("4semanas", ["D", "C", "B", "A"]),
+    ("todo", ["D", "C", "B", "A", "E"]),
+])
+def test_filter_agenda(mode, tags):
+    from datetime import date
+    assert [r["tag_id"] for r in filter_agenda(AGENDA, mode, date(2026, 10, 14))] == tags
