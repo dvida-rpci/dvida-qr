@@ -32,6 +32,7 @@ from pathlib import Path
 from nicegui import app, ui
 
 import gui_maintenance
+import gui_plan
 
 # ─────────────────────────────────────────────────────────────────────────
 # Configuración
@@ -451,6 +452,10 @@ with ui.column().classes("max-w-3xl mx-auto p-6 gap-4 w-full"):
 
         ui.button(
             "🧰 Mantenimientos", on_click=gui_maintenance.open_maintenance_dialog
+        ).props("color=secondary outline size=lg")
+
+        ui.button(
+            "📋 Plan de mantenimiento", on_click=gui_plan.open_plan_dialog
         ).props("color=secondary outline size=lg")
 
     # ── Log ────────────────────────────────────────────────────────────

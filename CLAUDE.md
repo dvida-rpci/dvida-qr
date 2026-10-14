@@ -185,7 +185,7 @@ Ver [docs/superpowers/specs/2026-09-20-historico-mantenimientos-design.md](docs/
 
 ## Plan de mantenimiento por sábana
 
-Ver [docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md](docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md). Fase 1 (base) hecha; fase 2 (ventana en `gui.py`) y fase 3 (sitio) pendientes.
+Ver [docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md](docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md). Fases 1 (base) y 2 (GUI) hechas; fase 3 (sitio) pendiente.
 
 - **Se repite por planta:** la migración `20261014120000_maintenance_plan.sql` es genérica (sin datos). El conocimiento reutilizable vive en `sabana_base.xlsx` (hojas `Clases`, `Actividades`, `Instrucciones`); cada planta lo importa y ajusta sus frecuencias en su propio Supabase.
 - **Tablas:** `equipment_classes` (horas/día estimadas), `maintenance_activities` (cada X h y/o Y semanas, `active`), `equipment_tags` (TAG → clase, `group_key` del par A/B, `regime` normal/alterna/principal/reserva), `maintenance_record_activities` (varias por registro) y `maintenance_records.hmi_hours` (lectura opcional del HMI).
@@ -195,7 +195,9 @@ Ver [docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md](docs/superp
 - **`maintenance_plan.py`** (puro, sin red): `load_library` (valida y reporta errores con hoja/fila), `plan_import` (merge por `code`, no pisa lo existente), `suggest_class` (letra del TAG + palabras clave en TIPO DE BOMBA/TIPO/SERVICIO/Título), `detect_pairs`, `load_plantilla_tags`, `export_library`.
 - **Planta nueva:** `./setup_supabase_planta.sh <project-ref>` (`supabase link` + `db push` + pasos manuales). **No usarlo en DVida**: su historial remoto no está sincronizado; ahí las migraciones van con `psql`.
 - **Tests:** `python3 -m pytest tests/supabase/test_maintenance_plan.py` (18, requiere `supabase start` y la migración aplicada en local) y `python3 -m pytest tests/test_maintenance_plan_lib.py` (10, sin red).
-- **Producción (`qgxvukllzuaiyhzegaef`):** la migración aún **no** está aplicada.
+- **Programación manual (fase 2):** migración `20261015120000_maintenance_manual_schedule.sql`. `rpc('schedule_manual', {p_tag, p_activity, p_date, p_note, p_replace})` devuelve `{status: 'conflict', conflicts, others}` si ya hay algo programado para ese TAG + actividad (o libre + libre); con `p_replace` el manual anterior queda `reemplazado` o el automático queda oculto. Un manual se cumple con un registro **cargado después** (`created_at`), no por fecha. Vista `maintenance_agenda` = automático + manual + "próximo" de registros libres (`source`). Tests: `tests/supabase/test_manual_schedule.py` (7).
+- **GUI:** botón **📋 Plan de mantenimiento** → `gui_plan.py` (pestañas Programación con filtro "Esta semana" vía `maintenance_plan.filter_agenda`, Sábana, Equipos con Auto-asignar). Cada pestaña se recarga al entrar. 🧰 Mantenimientos registra vía `create_maintenance_record` con horas HMI + casillas de actividades y avisa antes de sobrescribir un "próximo". Login compartido: `gui_maintenance.render_login_card`. Probada en headless a 360/390 px (sin overflow) y escritorio.
+- **Producción (`qgxvukllzuaiyhzegaef`):** ninguna de las dos migraciones está aplicada todavía.
 
 ## Archivos generados por `excel_migrator.py`
 
@@ -284,6 +286,7 @@ Bajo `<output_dir>/`:
 | [maintenance.js](maintenance.js), [maintenance.css](maintenance.css)   | ✅ Histórico de mantenimientos (Plan 2) — cliente Supabase, login, lectura/carga de historial, fotos+audio, comentarios, re-login por sesión expirada |
 | [supabase/migrations/](supabase/migrations/)                             | ✅ Schema + RLS + triggers + Storage del histórico de mantenimientos (Plan 1)                                                                                       |
 | [maintenance_plan.py](maintenance_plan.py), [sabana_base.xlsx](sabana_base.xlsx) | ✅ Plan de mantenimiento fase 1 — lógica pura + biblioteca de sábanas (frecuencias de ejemplo, validar con fabricante) |
+| [gui_plan.py](gui_plan.py)                                               | ✅ Ventana "📋 Plan de mantenimiento" (fase 2) — agenda/Esta semana, sábana, equipos, programación manual con advertencia |
 | [setup_supabase_planta.sh](setup_supabase_planta.sh)                     | ✅ Aplica todas las migraciones a un proyecto Supabase nuevo (no usar en DVida) |
 | [tests/supabase/](tests/supabase/)                                       | ✅ Suite pytest de RLS (40 tests, incl. `test_hardening.py`) — requiere `supabase start` (Docker) corriendo localmente; correr con `python3 -m pytest tests/supabase -v`                        |
 | `NI00011 Fichas Técnicas_Equipos STARnD GROUP SEB V3.xlsx`               | ✅ Source xlsx actual en raíz                                                                                                                                       |

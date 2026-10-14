@@ -92,6 +92,89 @@ def _today_iso() -> str:
     return date.today().isoformat()
 
 
+def render_login_card(container, client: Client, on_user):
+    """Formulario de login (compartido con gui_plan.py). Llama on_user(user) al entrar."""
+    container.clear()
+    with container:
+        with ui.card().classes("w-full max-w-sm"):
+            ui.label("Iniciar sesión").classes("font-semibold")
+            email_input = ui.input("Email").props("outlined dense").classes("w-full")
+            password_input = (
+                ui.input("Contraseña", password=True).props("outlined dense").classes("w-full")
+            )
+            error_label = ui.label("").classes("text-red-600 text-sm")
+
+            def do_login():
+                error_label.text = ""
+                try:
+                    result = client.auth.sign_in_with_password(
+                        {"email": email_input.value, "password": password_input.value}
+                    )
+                except Exception as e:
+                    error_label.text = f"No se pudo iniciar sesión: {friendly_error(e)}"
+                    return
+                on_user(result.user)
+
+            password_input.on("keydown.enter", do_login)
+            ui.button("Ingresar", on_click=do_login).props("color=primary")
+
+
+def fetch_tag_activities(client: Client, tag_id: str) -> list[dict]:
+    """Actividades activas de la sábana para la clase del TAG ([] si no tiene clase)."""
+    tag = client.table("equipment_tags").select("class_id").eq("tag_id", tag_id).execute().data
+    if not tag or not tag[0]["class_id"]:
+        return []
+    return (
+        client.table("maintenance_activities")
+        .select("id, name, interval_hours, interval_weeks")
+        .eq("class_id", tag[0]["class_id"])
+        .eq("active", True)
+        .order("name")
+        .execute()
+        .data
+    )
+
+
+SOURCE_LABEL = {"automatico": "automático, según sábana", "manual": "manual", "registro": "próximo de un registro"}
+
+
+def format_date(iso: str | None) -> str:
+    return date.fromisoformat(iso).strftime("%d/%m/%Y") if iso else "—"
+
+
+async def confirm_overwrite(tag_id: str, conflicts: list[dict], new_date: str) -> bool:
+    """Advertencia del spec: ya hay algo programado para ese TAG y actividad."""
+    with ui.dialog() as dialog, ui.card().classes("max-w-lg"):
+        for c in conflicts:
+            ui.markdown(
+                f"⚠️ **{tag_id} — {c['activity_name']}** ya está programado para el "
+                f"**{format_date(c['due_date'])}** ({SOURCE_LABEL.get(c['source'], c['source'])})."
+            )
+        ui.markdown(f"¿Sobrescribir con el **{format_date(new_date)}**?")
+        with ui.row().classes("w-full justify-end gap-2"):
+            ui.button("Cancelar", on_click=lambda: dialog.submit(False)).props("flat")
+            ui.button("Sobrescribir", on_click=lambda: dialog.submit(True)).props("color=orange")
+    result = await dialog
+    dialog.delete()
+    return bool(result)
+
+
+def activity_checkboxes(activities: list[dict], checked: set[str] = frozenset()) -> dict:
+    """Casillas de actividades de la sábana; devuelve {activity_id: checkbox}."""
+    boxes = {}
+    if activities:
+        ui.label("Actividades de la sábana").classes("text-sm font-semibold mt-1")
+        for a in activities:
+            freq = " / ".join(
+                part for part in (
+                    f"{a['interval_hours']:g} h" if a.get("interval_hours") else "",
+                    f"{a['interval_weeks']} sem" if a.get("interval_weeks") else "",
+                ) if part
+            )
+            boxes[a["id"]] = ui.checkbox(f"{a['name']} (cada {freq})", value=a["id"] in checked)
+    return boxes
+
+
 class AttachmentsPicker:
     """Selector de adjuntos (fotos + audios desde archivo) para usar dentro de un diálogo.
     `reserved` = adjuntos que el registro ya tiene (el tope de 5 es por registro)."""
@@ -227,32 +310,11 @@ def build_maintenance_screen(content):
     session_state: dict = {"user": None, "role": None}
 
     def render_login():
-        content.clear()
-        with content:
-            with ui.card().classes("w-full max-w-sm"):
-                ui.label("Iniciar sesión").classes("font-semibold")
-                email_input = ui.input("Email").props("outlined dense").classes("w-full")
-                password_input = (
-                    ui.input("Contraseña", password=True)
-                    .props("outlined dense")
-                    .classes("w-full")
-                )
-                error_label = ui.label("").classes("text-red-600 text-sm")
+        def on_user(user):
+            session_state["user"] = user
+            load_profile_and_render()
 
-                def do_login():
-                    error_label.text = ""
-                    try:
-                        result = client.auth.sign_in_with_password(
-                            {"email": email_input.value, "password": password_input.value}
-                        )
-                    except Exception as e:
-                        error_label.text = f"No se pudo iniciar sesión: {friendly_error(e)}"
-                        return
-                    session_state["user"] = result.user
-                    load_profile_and_render()
-
-                password_input.on("keydown.enter", do_login)
-                ui.button("Ingresar", on_click=do_login).props("color=primary")
+        render_login_card(content, client, on_user)
 
     def load_profile_and_render():
         try:
@@ -322,7 +384,10 @@ def build_maintenance_screen(content):
         try:
             result = (
                 client.table("maintenance_records")
-                .select("*, maintenance_comments(*), maintenance_attachments(*)")
+                .select(
+                    "*, maintenance_comments(*), maintenance_attachments(*), "
+                    "maintenance_record_activities(activity_id, maintenance_activities(name))"
+                )
                 .eq("tag_id", tag_id)
                 .order("performed_at", desc=True)
                 .execute()
@@ -363,6 +428,15 @@ def build_maintenance_screen(content):
                     if record.get("is_date_anomaly"):
                         ui.label("⚠️ revisar fecha").classes("text-red-600 text-xs font-semibold")
                 ui.label(record["description"])
+                done = [
+                    link["maintenance_activities"]["name"]
+                    for link in record.get("maintenance_record_activities", [])
+                    if link.get("maintenance_activities")
+                ]
+                if done:
+                    ui.label("✅ " + " · ".join(done)).classes("text-sm text-green-700")
+                if record.get("hmi_hours") is not None:
+                    ui.label(f"Horas HMI: {record['hmi_hours']:g} h").classes("text-sm text-gray-600")
                 if record.get("parts_used"):
                     ui.label(f"Repuestos: {record['parts_used']}").classes(
                         "text-sm text-gray-600"
@@ -423,15 +497,24 @@ def build_maintenance_screen(content):
         render_records(container, tag_id)
 
     def open_new_record_dialog(tag_id: str, records_container):
+        try:
+            activities = fetch_tag_activities(client, tag_id)
+        except Exception as e:
+            ui.notify(f"No se pudo leer la sábana: {friendly_error(e)}", type="negative")
+            activities = []
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
             ui.label(f"Registrar mantenimiento — {tag_id}").classes("text-lg font-semibold")
 
             performed_at_input = ui.input("Fecha del mantenimiento", value=_today_iso()).props(
                 "outlined dense type=date"
             ).classes("w-full")
+            hmi_input = ui.number("Horas HMI (opcional)", min=0, format="%.0f").props(
+                "outlined dense"
+            ).classes("w-full")
             type_select = ui.select(
                 {"preventivo": "Preventivo", "correctivo": "Correctivo"}, value="preventivo"
             ).props("outlined dense").classes("w-full")
+            boxes = activity_checkboxes(activities)
             description_input = ui.textarea("Descripción").props("outlined dense").classes("w-full")
             parts_input = ui.textarea("Repuestos / insumos (opcional)").props(
                 "outlined dense"
@@ -440,10 +523,20 @@ def build_maintenance_screen(content):
                 "outlined dense type=date"
             ).classes("w-full")
 
+            def selected_activities() -> list[str]:
+                return [aid for aid, box in boxes.items() if box.value]
+
+            def sync_next_visibility():
+                # Con actividades de la sábana el próximo lo calcula el sistema.
+                next_input.set_visibility(not selected_activities())
+
+            for box in boxes.values():
+                box.on_value_change(lambda _: sync_next_visibility())
+
             picker = AttachmentsPicker()
             error_label = ui.label("").classes("text-red-600 text-sm")
 
-            def submit():
+            async def submit():
                 error_label.text = ""
                 if (
                     not performed_at_input.value
@@ -452,6 +545,23 @@ def build_maintenance_screen(content):
                 ):
                     error_label.text = "Completá fecha, tipo y descripción."
                     return
+                activity_ids = selected_activities()
+                next_date = None if activity_ids else (next_input.value or None)
+                replaced_manual = []
+                if next_date:
+                    try:
+                        conflicts = (
+                            client.table("maintenance_agenda").select("*")
+                            .eq("tag_id", tag_id).is_("activity_id", "null")
+                            .not_.is_("due_date", "null").execute().data
+                        )
+                    except Exception as e:
+                        error_label.text = f"No se pudo revisar la agenda: {friendly_error(e)}"
+                        return
+                    if conflicts:
+                        if not await confirm_overwrite(tag_id, conflicts, next_date):
+                            return
+                        replaced_manual = [c["manual_id"] for c in conflicts if c["manual_id"]]
                 save_btn.disable()
                 payload = {
                     "tag_id": tag_id,
@@ -459,15 +569,23 @@ def build_maintenance_screen(content):
                     "type": type_select.value,
                     "description": description_input.value.strip(),
                     "parts_used": parts_input.value or None,
-                    "next_scheduled_at": next_input.value or None,
+                    "next_scheduled_at": next_date,
+                    "hmi_hours": hmi_input.value,
                 }
                 try:
-                    result = client.table("maintenance_records").insert(payload).execute()
-                    record_id = result.data[0]["id"]
+                    record_id = client.rpc(
+                        "create_maintenance_record",
+                        {"p_record": payload, "p_activity_ids": activity_ids},
+                    ).execute().data
                 except Exception as e:
                     error_label.text = f"No se pudo guardar: {friendly_error(e)}"
                     save_btn.enable()
                     return
+                if replaced_manual and session_state["role"] == "oficina":
+                    # El "próximo" nuevo sobrescribe la programación manual libre.
+                    client.table("maintenance_manual_schedule").update(
+                        {"status": "reemplazado"}
+                    ).in_("id", replaced_manual).execute()
                 errors = upload_attachments(client, tag_id, record_id, picker.pending)
                 _finish(dialog, records_container, tag_id, errors, "Registro guardado")
 
@@ -489,6 +607,14 @@ def build_maintenance_screen(content):
             next_input = ui.input(
                 "Próximo programado", value=record.get("next_scheduled_at") or ""
             ).props("outlined dense type=date").classes("w-full")
+            hmi_input = ui.number(
+                "Horas HMI", value=record.get("hmi_hours"), min=0, format="%.0f"
+            ).props("outlined dense").classes("w-full")
+            current = {link["activity_id"] for link in record.get("maintenance_record_activities", [])}
+            try:
+                boxes = activity_checkboxes(fetch_tag_activities(client, tag_id), current)
+            except Exception:
+                boxes = {}
             error_label = ui.label("").classes("text-red-600 text-sm")
 
             def submit():
@@ -504,6 +630,7 @@ def build_maintenance_screen(content):
                                 "description": description_input.value.strip(),
                                 "parts_used": parts_input.value or None,
                                 "next_scheduled_at": next_input.value or None,
+                                "hmi_hours": hmi_input.value,
                             }
                         )
                         .eq("id", record["id"])
@@ -511,6 +638,14 @@ def build_maintenance_screen(content):
                     )
                     if not result.data:  # RLS no dejó tocar ninguna fila
                         raise PermissionError("No tenés permiso para esta acción.")
+                    wanted = {aid for aid, box in boxes.items() if box.value}
+                    if boxes and wanted != current:
+                        links = client.table("maintenance_record_activities")
+                        links.delete().eq("record_id", record["id"]).execute()
+                        if wanted:
+                            links.insert(
+                                [{"record_id": record["id"], "activity_id": a} for a in wanted]
+                            ).execute()
                 except Exception as e:
                     error_label.text = f"No se pudo editar: {friendly_error(e)}"
                     return
