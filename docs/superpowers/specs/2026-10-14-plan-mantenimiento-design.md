@@ -173,7 +173,9 @@ Pestañas:
 
 1. **Sábana** — clases (nombre, horas/día) y sus actividades (nombre, cada h, cada semanas, activa). Edición en línea; botón **Importar sábana base** (muestra las altas de `plan_import` y pide confirmar) y **Exportar a biblioteca**.
 2. **Equipos** — todos los TAGs de `plantilla_sitio.xlsx`: clase asignada, par y régimen. Botón **Auto-asignar** (aplica `suggest_class` + `detect_pairs` solo a TAGs sin clase; régimen `alterna` por defecto en pares) con vista previa antes de guardar. Por par se elige *alternan* o *principal + reserva* (y cuál es la principal). TAGs que existen en la base pero no en la plantilla se marcan "no está en la plantilla" (TAG renombrado o borrado).
-3. **Agenda** — tabla de `maintenance_schedule` de toda la planta: vencidos primero, luego por `due_date`; filtros por estado y clase; búsqueda por TAG.
+3. **Agenda** — `maintenance_agenda` de toda la planta (ver "Esta semana"): filtro rápido, búsqueda por TAG o servicio, reprogramar y cancelar manuales.
+
+Cada pestaña se **recarga al entrar** (lo importado en Sábana tiene que verse en Equipos sin cerrar la ventana).
 
 Además, en 🧰 Mantenimientos (`gui_maintenance.py`) el alta usa `create_maintenance_record` y suma "Horas HMI" + casillas de actividades; la edición de oficina permite cambiar actividades y horas.
 
@@ -205,7 +207,20 @@ Secuencia completa: crear repo + proyecto Supabase → `setup_supabase_planta.sh
 - **`maintenance_plan.py` (pytest, sin red):** carga/validación de biblioteca, merge que no pisa frecuencias, `suggest_class` con los TAGs reales de la plantilla (centrífugas sí; neumáticas y dosificadoras no), `detect_pairs`.
 - **UI:** navegador headless contra Supabase local (formulario con actividades, bloque Próximos, tab Programados, 360/390 px) y prueba manual de la ventana de la GUI.
 
+## Celular primero (requisito del usuario, 2026-10-14)
+
+"Si no se ve bien en el celular no lo van a usar." Toda vista (sitio y GUI NiceGUI/Quasar) se prueba **primero a 360 y 390 px** en navegador headless y después en escritorio:
+
+- Sin desborde horizontal (`scrollWidth <= clientWidth`) en la página, los diálogos y los paneles de pestañas.
+- Las pestañas de Quasar deben caber **sin flechas de desplazamiento** (se montan sobre el texto): etiquetas cortas (`Agenda · Sábana · Equipos`), `dense no-caps`, relleno `px-2`.
+- Listas como **tarjetas de dos líneas** que se acomodan solas (nada de anchos fijos en fila); textos largos con `truncate w-full`; selectores e inputs `w-full` en celular y ancho fijo desde `sm:`.
+- Filtros con `ui.select` en vez de `ui.toggle` (el toggle de 5 opciones no cabe en 360 px).
+- Al medir, esperar a que termine la animación de cambio de pestaña (~2,5 s): durante el deslizamiento los elementos aparecen fuera de pantalla.
+
 ## Fases (un plan por fase)
+
+Estado: fase 1 ✅ (2026-10-14) · fase 2 ✅ (2026-10-14) · fase 3 pendiente. Migraciones aplicadas solo en Supabase local; producción pendiente de confirmación.
+
 
 1. **Base:** migración, función de alta, cálculo, RLS, `maintenance_plan.py`, `sabana_base.xlsx` inicial, `setup_supabase_planta.sh`, tests. Todo en Supabase local.
 2. **GUI:** migración de programación manual (`maintenance_manual_schedule`, `maintenance_agenda`, `schedule_manual`) con sus tests; ventana "Plan de mantenimiento" (con filtro "Esta semana" y reprogramación manual con advertencia) y cambios en 🧰 Mantenimientos.
