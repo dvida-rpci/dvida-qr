@@ -136,7 +136,7 @@ El campo "Próximo mantenimiento programado" del formulario de registro libre us
 
 ## Ver lo programado: "Esta semana" (agregado 2026-10-14)
 
-La pestaña **Programación** de la GUI y la pestaña **Programados** de `mantenimientos.html` leen `maintenance_agenda` y tienen filtros rápidos (por defecto **Esta semana**):
+La pestaña **Agenda** de la GUI y la pestaña **Programados** de `mantenimientos.html` leen `maintenance_agenda` y tienen filtros rápidos (por defecto **Esta semana**):
 
 - **Atrasados**: `status = vencido` y `sin_registro` (siempre arriba, en rojo).
 - **Esta semana**: `due_date` de lunes a domingo de la semana actual (hora de Colombia).
@@ -173,7 +173,7 @@ Pestañas:
 
 1. **Sábana** — clases (nombre, horas/día) y sus actividades (nombre, cada h, cada semanas, activa). Edición en línea; botón **Importar sábana base** (muestra las altas de `plan_import` y pide confirmar) y **Exportar a biblioteca**.
 2. **Equipos** — todos los TAGs de `plantilla_sitio.xlsx`: clase asignada, par y régimen. Botón **Auto-asignar** (aplica `suggest_class` + `detect_pairs` solo a TAGs sin clase; régimen `alterna` por defecto en pares) con vista previa antes de guardar. Por par se elige *alternan* o *principal + reserva* (y cuál es la principal). TAGs que existen en la base pero no en la plantilla se marcan "no está en la plantilla" (TAG renombrado o borrado).
-3. **Programación** — tabla de `maintenance_schedule` de toda la planta: vencidos primero, luego por `due_date`; filtros por estado y clase; búsqueda por TAG.
+3. **Agenda** — tabla de `maintenance_schedule` de toda la planta: vencidos primero, luego por `due_date`; filtros por estado y clase; búsqueda por TAG.
 
 Además, en 🧰 Mantenimientos (`gui_maintenance.py`) el alta usa `create_maintenance_record` y suma "Horas HMI" + casillas de actividades; la edición de oficina permite cambiar actividades y horas.
 

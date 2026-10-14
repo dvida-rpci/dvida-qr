@@ -119,10 +119,10 @@ def build_plan_screen(content):
 
     def render_main():
         with content:
-            with ui.tabs().classes("w-full") as tabs:
-                tab_prog = ui.tab("📅 Programación")
-                tab_sabana = ui.tab("📋 Sábana")
-                tab_equipos = ui.tab("⚙️ Equipos")
+            with ui.tabs().props("dense no-caps").classes("w-full") as tabs:
+                tab_prog = ui.tab("📅 Agenda").classes("px-2")
+                tab_sabana = ui.tab("📋 Sábana").classes("px-2")
+                tab_equipos = ui.tab("⚙️ Equipos").classes("px-2")
             with ui.tab_panels(tabs, value=tab_prog).classes("w-full"):
                 with ui.tab_panel(tab_prog):
                     prog_panel = ui.column().classes("w-full gap-2")
