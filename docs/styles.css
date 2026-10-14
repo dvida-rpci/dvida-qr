@@ -804,7 +804,9 @@ body.lightbox-open { overflow: hidden; }
 @media (max-width: 480px) {
     .banner-title { display: none; }
     .banner { justify-content: space-between; }
-    .banner-logo-img { height: 32px; }
+    .banner-logo-img { height: 32px; max-width: 100%; }
+    /* Los logos ceden ancho: así el botón de búsqueda nunca queda fuera de pantalla */
+    .banner-logo { flex-shrink: 1; min-width: 0; max-width: 28vw; overflow: hidden; }
 }
 
 @media (max-width: 380px) {

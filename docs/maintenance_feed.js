@@ -318,6 +318,36 @@
         return el;
     }
 
+    // ── Programados: una tarjeta por equipo con sus actividades ──────────
+
+    var AGENDA_PAGE = 20;
+
+    function renderAgendaCard(group, entry) {
+        var A = window.MaintAgenda;
+        var el = document.createElement('article');
+        el.className = 'maint-record feed-card agenda-card';
+        var tagHtml = entry
+            ? '<a class="feed-card-tag" href="' + escapeHtml(fichaHref(entry)) + '">' + escapeHtml(group.tag) + '</a>'
+            : '<span class="feed-card-tag">' + escapeHtml(group.tag) + '</span>';
+        var servicioHtml = entry && entry.servicio
+            ? '<span class="feed-card-servicio">' + escapeHtml(entry.servicio) + '</span>'
+            : '';
+        var items = group.rows.map(function (row) {
+            var info = A.statusInfo(row);
+            var extra = A.rescheduleText(row);
+            var when = row.due_date && (info.level === 'vencido' || info.level === 'critico')
+                ? '<span class="agenda-when">' + A.formatDate(row.due_date) + '</span>' : '';
+            return '<li class="agenda-item maint-level-' + info.level + '">' +
+                '<span class="agenda-activity">' + escapeHtml(row.activity_name) + '</span>' +
+                '<span class="agenda-status">' + escapeHtml(info.text) + '</span>' + when +
+                (extra ? '<span class="agenda-extra">' + escapeHtml(extra) + '</span>' : '') +
+                '</li>';
+        }).join('');
+        el.innerHTML = '<header class="feed-card-head">' + tagHtml + servicioHtml + '</header>' +
+            '<ul class="agenda-items">' + items + '</ul>';
+        return el;
+    }
+
     // ── Controlador de la página ─────────────────────────────────────────
 
     function init() {
@@ -330,7 +360,12 @@
         var tabs = Array.prototype.slice.call(document.querySelectorAll('.feed-tab'));
         var index = window.__TAG_INDEX__ || [];
         var byTag = indexByTag(index);
-        var state = { category: 'TODOS', query: '', offset: 0, token: 0 };
+        var state = { category: 'TODOS', query: '', offset: 0, token: 0, mode: 'realizados', agendaFilter: 'semana' };
+        var modeBtns = Array.prototype.slice.call(document.querySelectorAll('.feed-mode-btn'));
+        var agendaControls = document.getElementById('feed-agenda-controls');
+        var agendaSummary = document.getElementById('feed-agenda-summary');
+        var agendaFilter = document.getElementById('feed-agenda-filter');
+        var agendaRows = null;  // cache de maintenance_agenda (se refresca al entrar a Programados)
         var debounceTimer = null;
         var client;
         var viewer;
@@ -378,7 +413,69 @@
             moreBtn.disabled = false;
         }
 
+        function fetchAgendaRows() {
+            return client.from('maintenance_agenda').select('*').then(function (result) {
+                if (result.error) throw result.error;
+                agendaRows = result.data;
+                return agendaRows;
+            });
+        }
+
+        function updateProgramadosBadge() {
+            var btn = document.getElementById('feed-mode-programados');
+            if (!btn || !agendaRows || !window.MaintAgenda) return;
+            var n = window.MaintAgenda.summary(agendaRows.filter(function (r) { return byTag[r.tag_id]; })).vencidos;
+            btn.textContent = n ? 'Programados · 🔴 ' + n : 'Programados';
+        }
+
+        function loadAgenda(reset) {
+            var A = window.MaintAgenda;
+            if (reset) {
+                state.offset = 0;
+                state.token += 1;
+                listEl.innerHTML = '<p class="maint-loading">Cargando programación…</p>';
+                moreBtn.hidden = true;
+            }
+            var token = state.token;
+            var candidates = filterTags(index, state.category, state.query);
+            var allowed = {};
+            candidates.forEach(function (e) { allowed[e.tag] = true; });
+            var source = reset || !agendaRows ? fetchAgendaRows() : Promise.resolve(agendaRows);
+            source.then(function (rows) {
+                if (token !== state.token) return;
+                updateProgramadosBadge();
+                var visible = rows.filter(function (r) { return allowed[r.tag_id]; });
+                var sum = A.summary(visible);
+                agendaSummary.textContent = '🔴 ' + sum.vencidos + (sum.vencidos === 1 ? ' vencido' : ' vencidos') +
+                    (sum.criticos ? ' (' + sum.criticos + (sum.criticos === 1 ? ' crítico)' : ' críticos)') : '') +
+                    ' · ⚪ ' + sum.sinHistorial + ' sin historial';
+                var groups = A.groupByTag(A.filterAgenda(visible, state.agendaFilter, A.todayIso()));
+                if (state.offset === 0) listEl.innerHTML = '';
+                if (groups.length === 0) {
+                    var p = document.createElement('p');
+                    p.className = 'maint-empty';
+                    p.textContent = 'No hay mantenimientos para este filtro.';
+                    listEl.appendChild(p);
+                    moreBtn.hidden = true;
+                    return;
+                }
+                groups.slice(state.offset, state.offset + AGENDA_PAGE).forEach(function (group) {
+                    listEl.appendChild(renderAgendaCard(group, byTag[group.tag]));
+                });
+                state.offset += AGENDA_PAGE;
+                moreBtn.hidden = state.offset >= groups.length;
+                moreBtn.disabled = false;
+            }).catch(function (err) {
+                if (token !== state.token) return;
+                showError('No se pudo cargar la programación: ' + err.message);
+            });
+        }
+
         function load(reset) {
+            if (state.mode === 'programados') {
+                loadAgenda(reset);
+                return;
+            }
             if (reset) {
                 state.offset = 0;
                 state.token += 1;
@@ -468,7 +565,56 @@
         });
         moreBtn.addEventListener('click', function () { load(false); });
 
-        load(true);
+        // Selector Realizados | Programados (+ ?vista=programados&filtro=atrasados desde el inicio)
+        if (window.MaintAgenda && agendaFilter) {
+            window.MaintAgenda.FILTERS.forEach(function (f) {
+                var opt = document.createElement('option');
+                opt.value = f.value;
+                opt.textContent = f.label;
+                agendaFilter.appendChild(opt);
+            });
+            agendaFilter.addEventListener('change', function () {
+                state.agendaFilter = agendaFilter.value;
+                // Reinicia la lista usando el cache (no hace falta volver a pedir la agenda).
+                state.offset = 0;
+                state.token += 1;
+                listEl.innerHTML = '';
+                loadAgenda(false);
+            });
+        }
+
+        function selectMode(mode) {
+            state.mode = mode;
+            modeBtns.forEach(function (b) {
+                var on = b.dataset.mode === mode;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+            if (agendaControls) agendaControls.hidden = mode !== 'programados';
+            var h1 = document.querySelector('.page-header h1');
+            var sub = document.querySelector('.page-header .subtitle');
+            if (h1) h1.textContent = mode === 'programados' ? 'Mantenimientos programados' : 'Últimos mantenimientos';
+            if (sub) sub.textContent = mode === 'programados'
+                ? 'Lo que toca hacer, con los vencidos primero'
+                : 'Los mantenimientos más recientes de todos los equipos';
+            load(true);
+        }
+
+        modeBtns.forEach(function (b) {
+            b.addEventListener('click', function () { selectMode(b.dataset.mode); });
+        });
+
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('filtro') && agendaFilter) {
+            state.agendaFilter = params.get('filtro');
+            agendaFilter.value = state.agendaFilter;
+        }
+        if (params.get('vista') === 'programados' && modeBtns.length) {
+            selectMode('programados');
+        } else {
+            load(true);
+            if (window.MaintAgenda) fetchAgendaRows().then(updateProgramadosBadge).catch(function () {});
+        }
     }
 
     document.addEventListener('DOMContentLoaded', init);

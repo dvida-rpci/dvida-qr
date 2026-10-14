@@ -279,3 +279,56 @@ a.feed-card-tag:hover {
         flex-basis: calc(50% - 8px);
     }
 }
+
+/* ── Realizados | Programados (mobile-first) ── */
+
+.feed-mode { display: flex; gap: 8px; margin-bottom: 12px; }
+.feed-mode-btn {
+    flex: 1;
+    min-height: 44px;
+    padding: 10px 12px;
+    font: inherit;
+    font-weight: 700;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+}
+.feed-mode-btn.active { border-color: var(--accent); background: var(--accent); color: #ffffff; }
+
+.feed-agenda-controls { display: grid; gap: 8px; margin-bottom: 12px; }
+.feed-agenda-controls[hidden] { display: none; }
+.feed-agenda-summary { font-weight: 700; }
+.feed-filter { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.feed-filter select {
+    flex: 1;
+    min-height: 44px;
+    padding: 8px 10px;
+    font: inherit;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.agenda-items { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.agenda-item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    padding: 8px 10px;
+    border-left: 4px solid #16a34a;
+    border-radius: 6px;
+    background: var(--bg-alt);
+}
+.agenda-activity { font-weight: 600; flex: 1 1 100%; }
+.agenda-status { font-size: 0.9rem; }
+.agenda-when { font-size: 0.85rem; color: var(--text-muted); }
+.agenda-extra { flex: 1 1 100%; font-size: 0.8rem; color: #b45309; overflow-wrap: anywhere; }
+.agenda-item.maint-level-proximo { border-left-color: #ea580c; }
+.agenda-item.maint-level-vencido { border-left-color: #dc2626; background: #fef2f2; }
+.agenda-item.maint-level-critico { border-left-color: #7f1d1d; background: #fee2e2; }
+.agenda-item.maint-level-vencido .agenda-status,
+.agenda-item.maint-level-critico .agenda-status { color: #b91c1c; font-weight: 700; }
+.agenda-item.maint-level-sin_registro { border-left-color: #9ca3af; }

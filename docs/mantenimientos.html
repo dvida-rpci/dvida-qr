@@ -148,6 +148,14 @@
             <article>
 <header class="page-header"><h1>Últimos mantenimientos</h1>
 <p class="subtitle">Los mantenimientos más recientes de todos los equipos</p></header>
+<div class="feed-mode" role="tablist" aria-label="Vista">
+<button type="button" class="feed-mode-btn active" role="tab" data-mode="realizados" aria-selected="true">Realizados</button>
+<button type="button" class="feed-mode-btn" role="tab" data-mode="programados" aria-selected="false" id="feed-mode-programados">Programados</button>
+</div>
+<div class="feed-agenda-controls" id="feed-agenda-controls" hidden>
+<div class="feed-agenda-summary" id="feed-agenda-summary" aria-live="polite"></div>
+<label class="feed-filter">Ver <select id="feed-agenda-filter"></select></label>
+</div>
 <div class="feed-controls">
 <div class="feed-search">
 <input type="search" id="feed-search" placeholder="Buscar por TAG o elemento…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Buscar mantenimientos por TAG o elemento">
@@ -168,6 +176,7 @@
     </div>
     <script src="search-index.js"></script>
     <script src="script.js"></script>
+    <script src="maintenance_agenda.js"></script>
     <script src="maintenance.js"></script>
     <script src="maintenance_feed.js"></script>
 </body>

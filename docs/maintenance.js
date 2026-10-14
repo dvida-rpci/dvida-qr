@@ -139,6 +139,190 @@
         return div.innerHTML;
     }
 
+    // ── Plan de mantenimiento: agenda, rol, actividades y advertencias ──────
+    // Lógica pura en maintenance_agenda.js (window.MaintAgenda).
+
+    var Agenda = window.MaintAgenda;
+
+    function fetchAgenda(client, tagId) {
+        return client.from('maintenance_agenda').select('*').eq('tag_id', tagId).then(function (result) {
+            if (result.error) throw result.error;
+            return result.data;
+        });
+    }
+
+    // Rol del usuario con sesión ('oficina' | 'tecnico'), o null sin sesión/perfil.
+    function fetchRole(client) {
+        return client.auth.getSession().then(function (result) {
+            var session = result.data && result.data.session;
+            if (!session) return null;
+            return client.from('profiles').select('role').eq('user_id', session.user.id).then(function (r) {
+                return r.data && r.data[0] ? r.data[0].role : null;
+            });
+        });
+    }
+
+    function fetchTagActivities(client, tagId) {
+        return client.from('equipment_tags').select('class_id').eq('tag_id', tagId).then(function (r) {
+            if (r.error) throw r.error;
+            var classId = r.data[0] && r.data[0].class_id;
+            if (!classId) return [];
+            return client.from('maintenance_activities')
+                .select('id, name, interval_hours, interval_weeks')
+                .eq('class_id', classId).eq('active', true).order('name')
+                .then(function (a) {
+                    if (a.error) throw a.error;
+                    return a.data;
+                });
+        });
+    }
+
+    function openModal(innerHtml) {
+        var overlay = document.createElement('div');
+        overlay.className = 'maint-modal-overlay';
+        overlay.innerHTML = '<div class="maint-modal" role="dialog" aria-modal="true">' + innerHtml + '</div>';
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+
+    function conflictLine(tagId, c) {
+        var when = '<strong>' + Agenda.formatDate(c.due_date) + '</strong>';
+        var src = Agenda.SOURCE_LABEL[c.source] || c.source;
+        if (c.status === 'vencido' && c.days_overdue != null) {
+            return '⚠️ <strong>' + escapeHtml(tagId) + ' — ' + escapeHtml(c.activity_name) + '</strong> estaba programado para el ' +
+                when + ' y está <strong>vencido hace ' + c.days_overdue + ' días</strong> (' + escapeHtml(src) + ').';
+        }
+        return '⚠️ <strong>' + escapeHtml(tagId) + ' — ' + escapeHtml(c.activity_name) + '</strong> ya está programado para el ' +
+            when + ' (' + escapeHtml(src) + ').';
+    }
+
+    // Advertencia del spec. Resuelve con el motivo (string, '' si es opcional y vacío)
+    // o null si se cancela. Si algo está vencido y askReason, el motivo es obligatorio.
+    function confirmOverwrite(tagId, conflicts, newDate, askReason) {
+        var overdue = conflicts.some(function (c) { return c.status === 'vencido'; });
+        var verb = overdue ? 'Reprogramar' : 'Sobrescribir';
+        return new Promise(function (resolve) {
+            var overlay = openModal(
+                conflicts.map(function (c) { return '<p>' + conflictLine(tagId, c) + '</p>'; }).join('') +
+                '<p>¿' + verb + ' para el <strong>' + Agenda.formatDate(newDate) + '</strong>?</p>' +
+                (askReason ? '<label class="maint-field">Motivo' + (overdue ? ' (obligatorio: está vencido)' : ' (opcional)') +
+                    '<input type="text" name="reason"></label>' : '') +
+                '<div class="maint-form-error" hidden></div>' +
+                '<div class="maint-form-buttons">' +
+                '  <button type="button" class="maint-btn maint-btn-warning" data-action="ok">' + verb + '</button>' +
+                '  <button type="button" class="maint-btn maint-btn-secondary" data-action="cancel">Cancelar</button>' +
+                '</div>');
+            var input = overlay.querySelector('input[name="reason"]');
+            var errorBox = overlay.querySelector('.maint-form-error');
+            function close(value) {
+                document.removeEventListener('keydown', onKey);
+                overlay.remove();
+                resolve(value);
+            }
+            function onKey(evt) { if (evt.key === 'Escape') close(null); }
+            document.addEventListener('keydown', onKey);
+            overlay.querySelector('[data-action="cancel"]').addEventListener('click', function () { close(null); });
+            overlay.querySelector('[data-action="ok"]').addEventListener('click', function () {
+                var reason = input ? input.value.trim() : '';
+                if (input && overdue && !reason) {
+                    errorBox.textContent = 'Escribí el motivo de la reprogramación.';
+                    errorBox.hidden = false;
+                    return;
+                }
+                close(reason);
+            });
+            (input || overlay.querySelector('[data-action="ok"]')).focus();
+        });
+    }
+
+    // Reprogramar (solo oficina; RLS/servidor lo hacen cumplir).
+    function openRescheduleModal(client, row, onDone) {
+        var overlay = openModal(
+            '<h3>Reprogramar — ' + escapeHtml(row.activity_name) + '</h3>' +
+            '<label class="maint-field">Nueva fecha<input type="date" name="date" required></label>' +
+            '<div class="maint-form-error" hidden></div>' +
+            '<div class="maint-form-buttons">' +
+            '  <button type="button" class="maint-btn maint-btn-primary" data-action="ok">Continuar</button>' +
+            '  <button type="button" class="maint-btn maint-btn-secondary" data-action="cancel">Cancelar</button>' +
+            '</div>');
+        var dateInput = overlay.querySelector('input[name="date"]');
+        var errorBox = overlay.querySelector('.maint-form-error');
+        dateInput.value = Agenda.addDays(Agenda.todayIso(), 7);
+        overlay.querySelector('[data-action="cancel"]').addEventListener('click', function () { overlay.remove(); });
+        overlay.querySelector('[data-action="ok"]').addEventListener('click', function () {
+            if (!dateInput.value) return;
+            var params = { p_tag: row.tag_id, p_activity: row.activity_id, p_date: dateInput.value, p_note: null, p_replace: false };
+            overlay.remove();
+            client.rpc('schedule_manual', params).then(function (result) {
+                if (result.error) throw result.error;
+                if (result.data.status !== 'conflict') return result;
+                return confirmOverwrite(row.tag_id, result.data.conflicts, params.p_date, true).then(function (reason) {
+                    if (reason === null) return null;
+                    params.p_replace = true;
+                    params.p_note = reason || null;
+                    return client.rpc('schedule_manual', params).then(function (r2) {
+                        if (r2.error) throw r2.error;
+                        return r2;
+                    });
+                });
+            }).then(function (done) {
+                if (done) onDone();
+            }).catch(function (err) {
+                window.alert('No se pudo reprogramar: ' + err.message);
+            });
+        });
+    }
+
+    // Bloque "Próximos mantenimientos" de la ficha (lectura pública).
+    function renderUpcoming(container, client, tagId) {
+        container.innerHTML = '<p class="maint-loading">Cargando programación…</p>';
+        Promise.all([fetchAgenda(client, tagId), fetchRole(client)]).then(function (res) {
+            var rows = Agenda.filterAgenda(res[0], 'todo', Agenda.todayIso());
+            var isOficina = res[1] === 'oficina';
+            container.innerHTML = '';
+            if (rows.length === 0) return;
+            var h = document.createElement('h3');
+            h.className = 'maint-upcoming-title';
+            h.textContent = 'Próximos mantenimientos';
+            container.appendChild(h);
+            rows.forEach(function (row) {
+                var info = Agenda.statusInfo(row);
+                var item = document.createElement('div');
+                item.className = 'maint-upcoming-item maint-level-' + info.level;
+                var extra = Agenda.rescheduleText(row);
+                item.innerHTML =
+                    '<div class="maint-upcoming-main">' +
+                    '  <span class="maint-upcoming-activity">' + escapeHtml(row.activity_name) + '</span>' +
+                    '  <span class="maint-upcoming-status">' + escapeHtml(info.text) + '</span>' +
+                    '</div>' +
+                    (extra ? '<div class="maint-upcoming-extra">' + escapeHtml(extra) + '</div>' : '');
+                if (isOficina && row.status !== 'sin_fecha') {
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'maint-btn maint-btn-secondary maint-btn-small';
+                    btn.textContent = row.status === 'sin_registro' ? 'Programar' : 'Reprogramar';
+                    btn.addEventListener('click', function () {
+                        openRescheduleModal(client, row, function () { renderUpcoming(container, client, tagId); });
+                    });
+                    item.querySelector('.maint-upcoming-main').appendChild(btn);
+                }
+                container.appendChild(item);
+            });
+        }).catch(function (err) {
+            container.innerHTML = '';
+            var box = document.createElement('div');
+            box.className = 'maint-error';
+            box.textContent = 'No se pudo cargar la programación: ' + err.message + ' ';
+            var retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'maint-btn maint-btn-secondary';
+            retry.textContent = 'Reintentar';
+            retry.addEventListener('click', function () { renderUpcoming(container, client, tagId); });
+            box.appendChild(retry);
+            container.appendChild(box);
+        });
+    }
+
     // El bucket es privado: no se puede usar getPublicUrl() para servir el archivo
     // directo. renderAttachment() pide una signed URL de corta duración en su lugar.
     function renderAttachment(client, attachment) {
@@ -194,14 +378,28 @@
             ? '<p class="maint-record-next"><strong>Próximo programado:</strong> ' + formatDate(record.next_scheduled_at) + '</p>'
             : '';
 
+        var activitiesHtml = (record.maintenance_record_activities || [])
+            .filter(function (link) { return link.maintenance_activities; })
+            .map(function (link) {
+                var delay = Agenda.delayText(link.due_date, record.performed_at);
+                var late = delay && delay !== 'A tiempo';
+                return '<li class="maint-done-activity">✅ ' + escapeHtml(link.maintenance_activities.name) +
+                    (delay ? ' <span class="maint-delay' + (late ? ' maint-delay-late' : '') + '">' + delay + '</span>' : '') +
+                    '</li>';
+            }).join('');
+        var hmiHtml = record.hmi_hours != null
+            ? '<p class="maint-record-hmi"><strong>Horas HMI:</strong> ' + Number(record.hmi_hours).toLocaleString('es-CO') + ' h</p>'
+            : '';
+
         el.innerHTML =
             '<header class="maint-record-head">' +
             '  <span class="maint-record-date">' + formatDate(record.performed_at) + '</span>' +
             '  <span class="maint-record-type">' + (record.type === 'preventivo' ? 'Preventivo' : 'Correctivo') + '</span>' +
             badge +
             '</header>' +
+            (activitiesHtml ? '<ul class="maint-done-activities">' + activitiesHtml + '</ul>' : '') +
             '<p class="maint-record-description">' + escapeHtml(record.description) + '</p>' +
-            partsHtml + nextHtml +
+            hmiHtml + partsHtml + nextHtml +
             '<div class="maint-record-comments"></div>' +
             '<div class="maint-record-attachments"></div>' +
             '<div class="maint-record-add"></div>';
@@ -248,7 +446,8 @@
 
         client
             .from('maintenance_records')
-            .select('*, maintenance_comments(*), maintenance_attachments(*)')
+            .select('*, maintenance_comments(*), maintenance_attachments(*), ' +
+                'maintenance_record_activities(due_date, maintenance_activities(name))')
             .eq('tag_id', tagId)
             .order('performed_at', { ascending: false })
             .then(function (result) {
@@ -276,6 +475,11 @@
         var formSlot = document.createElement('div');
         formSlot.className = 'maint-form-slot';
         bodyContainer.appendChild(formSlot);
+
+        var upcoming = document.createElement('section');
+        upcoming.className = 'maint-upcoming';
+        bodyContainer.appendChild(upcoming);
+        renderUpcoming(upcoming, client, tagId);
 
         addBtn.addEventListener('click', function () {
             // Se implementa en el Task 5 (renderNewRecordForm).
@@ -609,10 +813,16 @@
             '  <label class="maint-field">Fecha del mantenimiento' +
             '    <input type="date" name="performed_at" required>' +
             '  </label>' +
+            '  <label class="maint-field">Horas HMI (opcional)' +
+            '    <input type="number" name="hmi_hours" min="0" step="1" inputmode="numeric" placeholder="Lo que marca el HMI">' +
+            '  </label>' +
             '  <fieldset class="maint-field">' +
             '    <legend>Tipo</legend>' +
             '    <label class="maint-radio"><input type="radio" name="type" value="preventivo" required> Preventivo</label>' +
             '    <label class="maint-radio"><input type="radio" name="type" value="correctivo"> Correctivo</label>' +
+            '  </fieldset>' +
+            '  <fieldset class="maint-field maint-activities" id="maint-activities" hidden>' +
+            '    <legend>Actividades de la sábana</legend>' +
             '  </fieldset>' +
             '  <label class="maint-field">Descripción' +
             '    <textarea name="description" required rows="3"></textarea>' +
@@ -620,7 +830,7 @@
             '  <label class="maint-field">Repuestos / insumos (opcional)' +
             '    <textarea name="parts_used" rows="2"></textarea>' +
             '  </label>' +
-            '  <label class="maint-field">Próximo mantenimiento programado (opcional)' +
+            '  <label class="maint-field" id="maint-next-field">Próximo mantenimiento programado (opcional)' +
             '    <input type="date" name="next_scheduled_at">' +
             '  </label>' +
             '  <div class="maint-attachments-editor" id="maint-attachments-editor"></div>' +
@@ -633,25 +843,57 @@
             '</form>';
 
         var form = document.getElementById('maint-new-record-form');
+        var activitiesBox = document.getElementById('maint-activities');
+        var nextField = document.getElementById('maint-next-field');
         form.elements.performed_at.value = draft.performed_at || todayLocalISO();
         if (draft.type) form.elements.type.value = draft.type;
+        form.elements.hmi_hours.value = draft.hmi_hours || '';
         form.elements.description.value = draft.description || '';
         form.elements.parts_used.value = draft.parts_used || '';
         form.elements.next_scheduled_at.value = draft.next_scheduled_at || '';
+
+        function selectedActivities() {
+            return Array.prototype.map.call(
+                activitiesBox.querySelectorAll('input[type="checkbox"]:checked'),
+                function (box) { return box.value; });
+        }
 
         function currentFields() {
             return {
                 performed_at: form.elements.performed_at.value,
                 type: form.elements.type.value,
+                hmi_hours: form.elements.hmi_hours.value,
                 description: form.elements.description.value,
                 parts_used: form.elements.parts_used.value,
-                next_scheduled_at: form.elements.next_scheduled_at.value
+                next_scheduled_at: form.elements.next_scheduled_at.value,
+                activity_ids: selectedActivities()
             };
         }
 
-        Array.prototype.forEach.call(form.elements, function (el) {
-            if (el.name) el.addEventListener('input', function () { saveDraft(tagId, currentFields()); });
-        });
+        // Con actividades de la sábana el próximo lo calcula el sistema.
+        function syncNextField() {
+            nextField.hidden = selectedActivities().length > 0;
+        }
+
+        form.addEventListener('input', function () { saveDraft(tagId, currentFields()); });
+        form.addEventListener('change', function () { syncNextField(); saveDraft(tagId, currentFields()); });
+
+        fetchTagActivities(getClient(), tagId).then(function (activities) {
+            if (!activities.length) return;
+            var restore = draft.activity_ids || [];
+            activities.forEach(function (a) {
+                var freq = [a.interval_hours ? a.interval_hours + ' h' : '', a.interval_weeks ? a.interval_weeks + ' sem' : '']
+                    .filter(Boolean).join(' / ');
+                var label = document.createElement('label');
+                label.className = 'maint-check';
+                label.innerHTML = '<input type="checkbox" value="' + escapeHtml(a.id) + '"> ' +
+                    '<span>' + escapeHtml(a.name) + ' <small>(cada ' + escapeHtml(freq) + ')</small></span>';
+                label.querySelector('input').checked = restore.indexOf(a.id) !== -1;
+                activitiesBox.appendChild(label);
+            });
+            activitiesBox.hidden = false;
+            syncNextField();
+        }).catch(function () { /* sin sábana: el formulario funciona como antes */ });
 
         var editor = createAttachmentsEditor(document.getElementById('maint-attachments-editor'), 0);
         var errorBox = document.getElementById('maint-form-error');
@@ -660,6 +902,26 @@
         document.getElementById('maint-cancel-btn').addEventListener('click', function () {
             container.innerHTML = '';
         });
+
+        // Antes de fijar un "próximo" libre: ¿ya hay algo programado para este equipo?
+        function confirmNextDate(client, fields) {
+            if (!fields.next_scheduled_at || fields.activity_ids.length) return Promise.resolve(true);
+            return fetchAgenda(client, tagId).then(function (rows) {
+                var conflicts = rows.filter(function (r) { return r.activity_id === null && r.due_date; });
+                if (!conflicts.length) return true;
+                return confirmOverwrite(tagId, conflicts, fields.next_scheduled_at, false)
+                    .then(function (r) { return r !== null; });
+            });
+        }
+
+        function nextDatesMessage(client, activityIds) {
+            if (!activityIds.length) return Promise.resolve('');
+            return fetchAgenda(client, tagId).then(function (rows) {
+                return rows.filter(function (r) { return activityIds.indexOf(r.activity_id) !== -1 && r.due_date; })
+                    .map(function (r) { return 'Próxima ' + r.activity_name + ': ' + Agenda.formatDate(r.due_date); })
+                    .join(' · ');
+            }).catch(function () { return ''; });
+        }
 
         form.addEventListener('submit', function (evt) {
             evt.preventDefault();
@@ -678,36 +940,42 @@
 
             var fields = currentFields();
             saveDraft(tagId, fields);
-
-            var submitBtn = form.querySelector('button[type="submit"]');
-            submitBtn.disabled = true;
-            statusBox.textContent = 'Guardando registro…';
-
             var client = getClient();
-            var payload = {
-                tag_id: tagId,
-                performed_at: fields.performed_at,
-                type: fields.type,
-                description: fields.description,
-                parts_used: fields.parts_used || null,
-                next_scheduled_at: fields.next_scheduled_at || null
-            };
+            var submitBtn = form.querySelector('button[type="submit"]');
 
-            client.from('maintenance_records').insert(payload).select().then(function (result) {
-                if (result.error) throw result.error;
-                var recordId = result.data[0].id;
-                // Desde acá el registro ya existe: un fallo posterior NO debe permitir re-enviar (duplicaría).
-                clearDraft(tagId);
-                return uploadAllAttachments(client, tagId, recordId, editor.getPending(), statusBox);
-            }).then(function (uploadResults) {
-                var failed = uploadResults.filter(function (r) { return r !== 'ok'; });
-                if (failed.length > 0) {
-                    statusBox.textContent = 'Registro guardado, pero ' + failed.length + ' adjunto(s) no se pudieron subir. Podés agregarlos después desde "Agregar comentario/adjunto".';
-                } else {
-                    statusBox.textContent = 'Registro guardado.';
-                }
-                // El botón queda deshabilitado a propósito: el formulario se reemplaza al recargar la lista.
-                setTimeout(onDone, failed.length > 0 ? 3500 : 800);
+            confirmNextDate(client, fields).then(function (ok) {
+                if (!ok) return;
+                submitBtn.disabled = true;
+                statusBox.textContent = 'Guardando registro…';
+                var payload = {
+                    tag_id: tagId,
+                    performed_at: fields.performed_at,
+                    type: fields.type,
+                    description: fields.description,
+                    parts_used: fields.parts_used || null,
+                    next_scheduled_at: fields.activity_ids.length ? null : (fields.next_scheduled_at || null),
+                    hmi_hours: fields.hmi_hours === '' ? null : Number(fields.hmi_hours)
+                };
+                var recordId;
+                return client.rpc('create_maintenance_record', { p_record: payload, p_activity_ids: fields.activity_ids })
+                    .then(function (result) {
+                        if (result.error) throw result.error;
+                        recordId = result.data;
+                        // Desde acá el registro ya existe: un fallo posterior NO debe permitir re-enviar (duplicaría).
+                        clearDraft(tagId);
+                        return uploadAllAttachments(client, tagId, recordId, editor.getPending(), statusBox);
+                    })
+                    .then(function (uploadResults) {
+                        var failed = uploadResults.filter(function (r) { return r !== 'ok'; });
+                        return nextDatesMessage(client, fields.activity_ids).then(function (nextMsg) {
+                            var msg = failed.length > 0
+                                ? 'Registro guardado, pero ' + failed.length + ' adjunto(s) no se pudieron subir. Podés agregarlos después desde "Agregar comentario/adjunto".'
+                                : 'Registro guardado.';
+                            statusBox.textContent = msg + (nextMsg ? ' ' + nextMsg : '');
+                            // El botón queda deshabilitado a propósito: el formulario se reemplaza al recargar la lista.
+                            setTimeout(onDone, failed.length > 0 || nextMsg ? 3500 : 800);
+                        });
+                    });
             }).catch(function (err) {
                 submitBtn.disabled = false;
                 statusBox.textContent = '';
@@ -822,6 +1090,23 @@
         var tagId = historialView.dataset.tag;
         var historialLoaded = false;
 
+        // Aviso al escanear el QR: si este equipo tiene mantenimientos vencidos se ve
+        // arriba sin abrir el historial (diseño, "Si olvidan el aplicativo").
+        try {
+            fetchAgenda(getClient(), tagId).then(function (rows) {
+                var n = Agenda.summary(rows).vencidos;
+                if (!n) return;
+                var alertBtn = document.createElement('button');
+                alertBtn.type = 'button';
+                alertBtn.className = 'maint-overdue-alert';
+                alertBtn.textContent = '🔴 ' + n + (n === 1 ? ' mantenimiento vencido' : ' mantenimientos vencidos') +
+                    ' en este equipo — ver';
+                alertBtn.addEventListener('click', function () { showHistorial(); });
+                var toggle = btnFicha.parentNode;
+                toggle.parentNode.insertBefore(alertBtn, toggle);
+            }).catch(function () { /* sin red: la ficha sigue funcionando */ });
+        } catch (e) { /* Supabase sin configurar */ }
+
         function showFicha() {
             fichaView.hidden = false;
             historialView.hidden = true;
@@ -846,5 +1131,29 @@
 
         btnFicha.addEventListener('click', showFicha);
         btnHistorial.addEventListener('click', showHistorial);
+    });
+
+    // Inicio del sitio: franja de vencidos de toda la planta (diseño, "Si olvidan el aplicativo").
+    document.addEventListener('DOMContentLoaded', function () {
+        var homeAlert = document.getElementById('home-overdue');
+        if (!homeAlert) return;
+        try {
+            getClient().from('maintenance_agenda').select('tag_id, status, days_overdue').eq('status', 'vencido')
+                .then(function (result) {
+                    if (result.error) return;
+                    // Solo equipos del sitio (los TAGs renombrados/borrados no inflan el aviso).
+                    var known = {};
+                    (window.__SEARCH_INDEX__ || []).forEach(function (e) { known[e.tag] = true; });
+                    var rows = window.__SEARCH_INDEX__
+                        ? result.data.filter(function (r) { return known[r.tag_id]; })
+                        : result.data;
+                    var sum = Agenda.summary(rows);
+                    if (!sum.vencidos) return;
+                    homeAlert.textContent = '🔴 ' + sum.vencidos +
+                        (sum.vencidos === 1 ? ' mantenimiento vencido' : ' mantenimientos vencidos') +
+                        (sum.criticos ? ' (' + sum.criticos + (sum.criticos === 1 ? ' crítico)' : ' críticos)') : '') + ' → ver';
+                    homeAlert.hidden = false;
+                });
+        } catch (e) { /* Supabase sin configurar: no hay franja */ }
     });
 })();
