@@ -95,6 +95,56 @@ Reglas:
 - `maintenance_record_activities`: `insert` si `is_member()` y el registro es del usuario (`created_by = auth.uid()`) o `is_oficina()`; `delete` solo `is_oficina()` (para corregir desde la GUI).
 - `hmi_hours` sigue las políticas existentes de `maintenance_records` (editar = oficina, queda en `maintenance_audit_log`).
 
+## Programación manual y advertencia de duplicados (agregado 2026-10-14)
+
+Pedido del usuario: poder **programar mantenimientos a mano** y que el sistema **advierta** si ese equipo ya tiene un mantenimiento programado (automático o manual), preguntando si se sobrescribe.
+
+### Datos (migración nueva, fase 2)
+
+`public.maintenance_manual_schedule`
+- `id uuid pk`, `tag_id text not null`, `activity_id uuid references maintenance_activities` (null = mantenimiento libre, fuera de la sábana), `scheduled_for date not null`, `note text`, `status text not null default 'pendiente' check (status in ('pendiente','reemplazado','cancelado'))`, `replaced_by uuid references maintenance_manual_schedule`, `created_by uuid not null default auth.uid()`, `created_at timestamptz default now()`.
+- **Se cumple solo:** un manual pendiente deja de mostrarse cuando se registra un mantenimiento de ese TAG con `performed_at >= created_at::date` (con esa actividad, si la tiene; cualquier registro, si es libre). No se borra: queda como historia.
+- RLS: lectura pública; crear y cancelar: `oficina`.
+
+### Agenda unificada: vista `public.maintenance_agenda`
+
+Une las tres fuentes de "lo que está programado", con columna `source`:
+
+| `source` | Origen | Regla |
+| --- | --- | --- |
+| `automatico` | `maintenance_schedule` (sábana) | Se oculta si hay un manual **pendiente** para el mismo TAG y actividad: el manual lo reemplaza |
+| `manual` | `maintenance_manual_schedule` pendiente y no cumplido | — |
+| `registro` | `next_scheduled_at` del último registro libre del TAG (el campo que ya existe en el formulario) | Solo si no hay un registro posterior del mismo TAG |
+
+Columnas: `tag_id`, `activity_id`, `activity_name` ("Libre" si no tiene), `due_date`, `status` (mismos estados), `source`, `manual_id`, `note`.
+
+### Advertencia y sobrescritura (lado servidor)
+
+Función `public.schedule_manual(p_tag text, p_activity uuid, p_date date, p_note text, p_replace boolean default false)`:
+
+1. Busca en `maintenance_agenda` lo programado para ese TAG.
+2. **Mismo TAG y misma actividad** (o, si es libre, otro manual libre del mismo TAG) y `p_replace = false` → **no guarda** y responde con el conflicto: fecha, origen (automático/manual/registro) y nota.
+3. Con `p_replace = true`: si el existente es manual, pasa a `reemplazado` (con `replaced_by`); si es automático, el manual nuevo lo oculta mientras esté pendiente. El cálculo automático vuelve a mandar en cuanto se registra el mantenimiento.
+4. Lo programado para **otras actividades** del mismo equipo no bloquea: se devuelve como aviso informativo ("Este equipo también tiene: Revisión sello el 2027-04-14").
+
+En la GUI y en el sitio, el conflicto se muestra así:
+
+> ⚠️ **200-P-01A — Lubricación rodamientos** ya está programado para el **07/12/2026** (automático, según sábana).
+> ¿Sobrescribir con el **20/11/2026**? [Sobrescribir] [Cancelar]
+
+El campo "Próximo mantenimiento programado" del formulario de registro libre usa la misma advertencia antes de guardar.
+
+## Ver lo programado: "Esta semana" (agregado 2026-10-14)
+
+La pestaña **Programación** de la GUI y la pestaña **Programados** de `mantenimientos.html` leen `maintenance_agenda` y tienen filtros rápidos (por defecto **Esta semana**):
+
+- **Atrasados**: `status = vencido` y `sin_registro` (siempre arriba, en rojo).
+- **Esta semana**: `due_date` de lunes a domingo de la semana actual (hora de Colombia).
+- **Próxima semana** y **Próximas 4 semanas**.
+- **Todo**.
+
+Cada fila muestra el TAG (con link a su ficha en el sitio), el servicio, la actividad, la fecha, el origen (automático, manual o registro) y, en los automáticos, si la fecha sale de horas o de semanas. Se combinan con los tabs de categoría y el buscador existentes. Desde la GUI, una fila se puede **reprogramar a mano** (abre `schedule_manual` con la advertencia de arriba).
+
 ## Biblioteca `sabana_base.xlsx` (raíz del repo, versionada)
 
 Conocimiento de RPCI reutilizable entre plantas.
@@ -158,5 +208,5 @@ Secuencia completa: crear repo + proyecto Supabase → `setup_supabase_planta.sh
 ## Fases (un plan por fase)
 
 1. **Base:** migración, función de alta, cálculo, RLS, `maintenance_plan.py`, `sabana_base.xlsx` inicial, `setup_supabase_planta.sh`, tests. Todo en Supabase local.
-2. **GUI:** ventana "Plan de mantenimiento" y cambios en 🧰 Mantenimientos.
-3. **Sitio:** formulario con actividades y horas, bloque Próximos, tab Programados. Regenerar sitio, documentar en `CLAUDE.md`, aplicar migración en producción con confirmación.
+2. **GUI:** migración de programación manual (`maintenance_manual_schedule`, `maintenance_agenda`, `schedule_manual`) con sus tests; ventana "Plan de mantenimiento" (con filtro "Esta semana" y reprogramación manual con advertencia) y cambios en 🧰 Mantenimientos.
+3. **Sitio:** formulario con actividades, horas y advertencia en "Próximo mantenimiento"; bloque Próximos; tab Programados con filtro "Esta semana". Regenerar sitio, documentar en `CLAUDE.md`, aplicar migración en producción con confirmación.
