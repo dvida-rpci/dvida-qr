@@ -543,6 +543,7 @@ def page_skeleton(
     </div>
     <script src="{rel_prefix}search-index.js"></script>
     <script src="{rel_prefix}script.js"></script>
+    <script src="{rel_prefix}maintenance_agenda.js"></script>
     <script src="{rel_prefix}maintenance.js"></script>
     {extra_scripts}
 </body>
@@ -580,6 +581,14 @@ def render_maintenance_page(items: list[Item]) -> str:
     return "\n".join([
         '<header class="page-header"><h1>Últimos mantenimientos</h1>',
         '<p class="subtitle">Los mantenimientos más recientes de todos los equipos</p></header>',
+        '<div class="feed-mode" role="tablist" aria-label="Vista">',
+        '<button type="button" class="feed-mode-btn active" role="tab" data-mode="realizados" aria-selected="true">Realizados</button>',
+        '<button type="button" class="feed-mode-btn" role="tab" data-mode="programados" aria-selected="false" id="feed-mode-programados">Programados</button>',
+        '</div>',
+        '<div class="feed-agenda-controls" id="feed-agenda-controls" hidden>',
+        '<div class="feed-agenda-summary" id="feed-agenda-summary" aria-live="polite"></div>',
+        '<label class="feed-filter">Ver <select id="feed-agenda-filter"></select></label>',
+        '</div>',
         '<div class="feed-controls">',
         '<div class="feed-search">',
         '<input type="search" id="feed-search" placeholder="Buscar por TAG o elemento…" '
@@ -601,6 +610,8 @@ def render_home(grouped: dict[str, list[Item]]) -> str:
         f'<header class="page-header"><h1>{h(SITE_TITLE)}</h1>',
         f'<p class="subtitle">{h(SITE_SUBTITLE)}</p></header>',
         '<a class="home-feed-cta" href="mantenimientos.html">🛠 Ver últimos mantenimientos →</a>',
+        # Lo llena maintenance.js si hay vencidos (diseño, "Si olvidan el aplicativo")
+        '<a class="home-overdue" id="home-overdue" href="mantenimientos.html?vista=programados&amp;filtro=atrasados" hidden></a>',
         '<div class="accordion">',
     ]
     for cat in CATEGORY_ORDER:
@@ -1567,7 +1578,9 @@ body.lightbox-open { overflow: hidden; }
 @media (max-width: 480px) {
     .banner-title { display: none; }
     .banner { justify-content: space-between; }
-    .banner-logo-img { height: 32px; }
+    .banner-logo-img { height: 32px; max-width: 100%; }
+    /* Los logos ceden ancho: así el botón de búsqueda nunca queda fuera de pantalla */
+    .banner-logo { flex-shrink: 1; min-width: 0; max-width: 28vw; overflow: hidden; }
 }
 
 @media (max-width: 380px) {
@@ -1950,6 +1963,7 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
         "migration_metadata.json", "search-index.json", "search-index.js", "urls.txt",
         "maintenance.css", "maintenance.js",
         "maintenance_feed.css", "maintenance_feed.js", "mantenimientos.html",
+        "maintenance_agenda.js",
     }
     if output_dir.exists():
         for fname in KNOWN_FILES:
@@ -1969,7 +1983,8 @@ def generate_site(items: list[Item], output_dir: Path, config: Optional[dict] = 
     (output_dir / "styles.css").write_text(final_css, encoding="utf-8")
     (output_dir / "script.js").write_text(SCRIPT_JS, encoding="utf-8")
     # Histórico de mantenimientos: archivos estáticos propios (no embebidos en Python)
-    for static_name in ("maintenance.css", "maintenance.js", "maintenance_feed.css", "maintenance_feed.js"):
+    for static_name in ("maintenance.css", "maintenance.js", "maintenance_feed.css", "maintenance_feed.js",
+                        "maintenance_agenda.js"):
         (output_dir / static_name).write_text(
             (REPO_ROOT / static_name).read_text(encoding="utf-8"), encoding="utf-8"
         )

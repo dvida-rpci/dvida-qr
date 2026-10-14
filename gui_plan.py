@@ -463,11 +463,16 @@ def build_plan_screen(content):
                              lambda: render_programacion(panel))
             return
         servicio = {r["TAG"]: r.get("SERVICIO") or "" for r in _plantilla_rows()}
+        # Solo equipos de la plantilla (los huérfanos se señalan en la pestaña Equipos).
+        if servicio:
+            agenda = [r for r in agenda if r["tag_id"] in servicio]
         summary = mp.agenda_summary(agenda)
         selected: dict = {}  # (tag, activity_id) → fila, para acciones en lote
         with panel:
-            ui.label(f"🔴 {summary['vencidos']} vencidos ({summary['criticos']} críticos) · "
-                     f"⚪ {summary['sin_historial']} sin historial").classes("font-semibold")
+            v, c = summary["vencidos"], summary["criticos"]
+            ui.label(f"🔴 {v} vencido{'s' if v != 1 else ''}"
+                     + (f" ({c} crítico{'s' if c != 1 else ''})" if c else "")
+                     + f" · ⚪ {summary['sin_historial']} sin historial").classes("font-semibold")
             with ui.row().classes("items-center gap-2 w-full"):
                 mode = ui.select(mp.AGENDA_FILTERS, value="semana", label="Ver").props(
                     "outlined dense").classes("w-full sm:w-52")

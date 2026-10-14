@@ -257,7 +257,7 @@ Secuencia completa: crear repo + proyecto Supabase → `setup_supabase_planta.sh
 
 ## Fases (un plan por fase)
 
-Estado: fase 1 ✅ (2026-10-14) · fase 2 ✅ (2026-10-14) · fase 3 en curso · fase 4 (resumen semanal automático) por definir canal. Migraciones aplicadas solo en Supabase local; producción pendiente de confirmación.
+Estado: fase 1 ✅ (2026-10-14) · fase 2 ✅ (2026-10-14) · fase 3 ✅ (2026-10-14) · fase 4 (resumen semanal automático) por definir canal. Migraciones aplicadas solo en Supabase local; producción pendiente de confirmación.
 
 
 1. **Base:** migración, función de alta, cálculo, RLS, `maintenance_plan.py`, `sabana_base.xlsx` inicial, `setup_supabase_planta.sh`, tests. Todo en Supabase local.
