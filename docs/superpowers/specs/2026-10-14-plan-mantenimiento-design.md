@@ -145,6 +145,32 @@ La pestaña **Agenda** de la GUI y la pestaña **Programados** de `mantenimiento
 
 Cada fila muestra el TAG (con link a su ficha en el sitio), el servicio, la actividad, la fecha, el estado y el origen (automático, manual o registro). Se combinan con los tabs de categoría y el buscador existentes. Desde la GUI, una fila se puede **reprogramar a mano** (abre `schedule_manual` con la advertencia de arriba).
 
+## Atrasados: cómo se reportan y qué pasa al reprogramarlos (agregado 2026-10-14, fase 3)
+
+**Qué es atrasado**
+- `vencido`: la fecha programada (automática, manual o "próximo" de un registro) ya pasó. Se muestra **"Vencido hace N días"** en rojo (`days_overdue = hoy − due_date`).
+- `sin_registro`: la actividad nunca se ha registrado en ese equipo, así que no hay desde dónde contar. Se muestra en gris **"Nunca registrado — registralo para arrancar el conteo"**. Cuenta como atrasado en los filtros, pero no tiene días.
+
+**Dónde se reporta**
+- Siempre **primero** en la Agenda (GUI) y en Programados (sitio), vencidos por antigüedad y después los sin registro.
+- Contador visible: el selector de `mantenimientos.html` muestra **"Programados · 🔴 N atrasados"**; en la ficha, el bloque "Próximos mantenimientos" pinta en rojo la fila vencida.
+
+**Cuando se hace tarde**
+- El próximo se cuenta desde la **fecha real** en que se hizo, no desde la que debió ser (la sábana mide intervalos reales entre intervenciones).
+- El registro **guarda la fecha que tenía programada** (`maintenance_record_activities.due_date`, la *original* si fue reprogramada). La tarjeta del historial dice **"Hecho con 12 días de atraso"** o **"A tiempo"**. Esto deja la base lista para medir cumplimiento del plan.
+
+**Cuando se reprograma**
+- Solo `oficina` reprograma (GUI y sitio), con la advertencia de siempre. Si lo que se reemplaza está **vencido**, el mensaje lo dice y el **motivo es obligatorio** (el servidor rechaza sin motivo):
+  > ⚠️ **200-P-01A — Lubricación rodamientos** estaba programado para el **07/12/2026** y está **vencido hace 12 días**. Reprogramar para el **20/12/2026**. Motivo: [ falta repuesto ]
+- El manual nuevo guarda `previous_due_date`, `original_due_date` (la primera fecha de la cadena) y `reschedule_count` (cuántas veces se corrió desde el último mantenimiento hecho). El anterior queda `reemplazado`: nada se borra.
+- Mientras está reprogramado, la fila dice **"Reprogramado ×2 · fecha original 07/12/2026 · motivo: falta repuesto"** y su estado sale de la fecha nueva (no aparece como vencido hasta que esa también pase). Si vuelve a vencer: **"Vencido hace N días · reprogramado 2 veces"**.
+- Cuando por fin se registra, el atraso se mide contra la **fecha original**, no contra la última reprogramación: reprogramar no maquilla el cumplimiento.
+
+**Datos (migración `20261016120000_overdue_tracking.sql`)**
+- `maintenance_manual_schedule`: `previous_due_date date`, `original_due_date date`, `reschedule_count int not null default 0`.
+- `maintenance_record_activities.due_date date` (lo llena `create_maintenance_record` antes de insertar el registro; null si no había fecha).
+- `maintenance_agenda_at` agrega `original_due_date`, `reschedule_count`, `days_overdue`.
+
 ## Biblioteca `sabana_base.xlsx` (raíz del repo, versionada)
 
 Conocimiento de RPCI reutilizable entre plantas.
