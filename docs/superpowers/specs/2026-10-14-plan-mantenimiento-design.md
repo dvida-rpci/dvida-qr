@@ -173,6 +173,11 @@ Cada fila muestra el TAG (con link a su ficha en el sitio), el servicio, la acti
 - **Agrupado por equipo en el sitio:** una tarjeta por TAG con sus actividades vencidas (no una por actividad) y "Mostrar más" de a 20 tarjetas, para que en el celular no sea una lista infinita.
 - **Reprogramar en lote (GUI):** se seleccionan varios vencidos y se reprograman a una fecha con **un solo motivo**; cada uno queda con su propia trazabilidad (`schedule_manual` por fila, con `p_replace`).
 
+**Si olvidan el aplicativo y se vence todo**
+- *Que se vea sin buscarlo (fase 3):* la ficha muestra arriba, al escanear el QR, **"🔴 N mantenimientos vencidos en este equipo"** (sin abrir el historial); el inicio del sitio muestra la franja **"🔴 N mantenimientos vencidos (M críticos) → ver"** enlazada a Programados/Atrasados.
+- *Recuperarse (fase 3):* "Programar seleccionados" (GUI) tiene **"Repartir en N semanas"**: distribuye los seleccionados en N semanas a partir de la fecha elegida, los más atrasados primero, con un solo motivo. Cada fila conserva su trazabilidad y el atraso se sigue midiendo contra la fecha original.
+- *Que el sistema avise solo (fase 4, aparte):* resumen semanal automático (lunes 7 a. m.) "Esta semana: N programados · 🔴 M vencidos (K críticos)" con enlace a la agenda. Canal por definir con el usuario (correo / WhatsApp); requiere configuración por planta.
+
 **Datos (migración `20261016120000_overdue_tracking.sql`)**
 - `maintenance_manual_schedule`: `previous_due_date date`, `original_due_date date`, `reschedule_count int not null default 0`.
 - `maintenance_record_activities.due_date date` (lo llena `create_maintenance_record` antes de insertar el registro; null si no había fecha).
@@ -252,7 +257,7 @@ Secuencia completa: crear repo + proyecto Supabase → `setup_supabase_planta.sh
 
 ## Fases (un plan por fase)
 
-Estado: fase 1 ✅ (2026-10-14) · fase 2 ✅ (2026-10-14) · fase 3 pendiente. Migraciones aplicadas solo en Supabase local; producción pendiente de confirmación.
+Estado: fase 1 ✅ (2026-10-14) · fase 2 ✅ (2026-10-14) · fase 3 en curso · fase 4 (resumen semanal automático) por definir canal. Migraciones aplicadas solo en Supabase local; producción pendiente de confirmación.
 
 
 1. **Base:** migración, función de alta, cálculo, RLS, `maintenance_plan.py`, `sabana_base.xlsx` inicial, `setup_supabase_planta.sh`, tests. Todo en Supabase local.

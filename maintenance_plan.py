@@ -293,3 +293,11 @@ def agenda_summary(rows: list[dict]) -> dict:
         "criticos": sum(1 for r in overdue if (r.get("days_overdue") or 0) >= CRITICAL_DAYS),
         "sin_historial": sum(1 for r in rows if r["status"] == "sin_registro"),
     }
+
+
+def spread_dates(count: int, start: date, weeks: int) -> list[date]:
+    """Reparte `count` mantenimientos en `weeks` semanas desde `start` (mismo día de la
+    semana): los primeros de la lista (los más atrasados) caen primero."""
+    weeks = max(1, weeks)
+    per_week = -(-count // weeks)  # techo
+    return [start + timedelta(weeks=i // per_week) for i in range(count)] if count else []

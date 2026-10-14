@@ -8,6 +8,7 @@ from maintenance_plan import (
     LibraryError,
     detect_pairs,
     agenda_summary,
+    spread_dates,
     filter_agenda,
     week_bounds,
     export_library,
@@ -204,3 +205,11 @@ def test_agenda_summary():
         {"status": "proximo"},
     ]
     assert agenda_summary(rows) == {"vencidos": 2, "criticos": 1, "sin_historial": 1}
+
+
+def test_spread_dates_reparte_por_semanas():
+    from datetime import date
+    start = date(2026, 10, 19)
+    assert spread_dates(5, start, 2) == [start] * 3 + [date(2026, 10, 26)] * 2
+    assert spread_dates(3, start, 1) == [start] * 3
+    assert spread_dates(0, start, 3) == []

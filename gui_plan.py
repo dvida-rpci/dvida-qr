@@ -551,16 +551,21 @@ def build_plan_screen(content):
                 "outlined dense type=date").classes("w-full")
             reason = ui.input("Motivo (obligatorio: hay vencidos)" if overdue else "Motivo (opcional)").props(
                 "outlined dense").classes("w-full")
+            weeks = ui.number("Repartir en N semanas (1 = todos en esa fecha)", value=1, min=1,
+                              format="%.0f").props("outlined dense").classes("w-full")
 
             def apply():
                 if overdue and not (reason.value or "").strip():
                     ui.notify("Escribí el motivo: hay mantenimientos vencidos.", type="warning")
                     return
+                start = date.fromisoformat(date_in.value)
+                ordered = mp.filter_agenda(rows, "todo", date.today())  # más atrasados primero
+                dates = mp.spread_dates(len(ordered), start, int(weeks.value or 1))
                 errors = []
-                for r in rows:
+                for r, when in zip(ordered, dates):
                     try:
                         client.rpc("schedule_manual", {
-                            "p_tag": r["tag_id"], "p_activity": r["activity_id"], "p_date": date_in.value,
+                            "p_tag": r["tag_id"], "p_activity": r["activity_id"], "p_date": when.isoformat(),
                             "p_note": (reason.value or "").strip() or None, "p_replace": True,
                         }).execute()
                     except Exception as e:
