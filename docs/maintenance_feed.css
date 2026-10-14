@@ -332,3 +332,17 @@ a.feed-card-tag:hover {
 .agenda-item.maint-level-vencido .agenda-status,
 .agenda-item.maint-level-critico .agenda-status { color: #b91c1c; font-weight: 700; }
 .agenda-item.maint-level-sin_registro { border-left-color: #9ca3af; }
+
+.agenda-done {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    margin-left: auto;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 700;
+    text-decoration: none;
+}

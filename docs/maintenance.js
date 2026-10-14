@@ -143,6 +143,10 @@
     // Lógica pura en maintenance_agenda.js (window.MaintAgenda).
 
     var Agenda = window.MaintAgenda;
+    // Actividad pedida con ?hecho= en la URL ('' = mantenimiento libre); null = nada pendiente.
+    var pendingDone = typeof window !== 'undefined' && window.location
+        ? new URLSearchParams(window.location.search).get('hecho')
+        : null;
 
     function fetchAgenda(client, tagId) {
         return client.from('maintenance_agenda').select('*').eq('tag_id', tagId).then(function (result) {
@@ -274,11 +278,12 @@
     }
 
     // Bloque "Próximos mantenimientos" de la ficha (lectura pública).
-    function renderUpcoming(container, client, tagId) {
+    function renderUpcoming(container, client, tagId, openForm) {
         container.innerHTML = '<p class="maint-loading">Cargando programación…</p>';
         Promise.all([fetchAgenda(client, tagId), fetchRole(client)]).then(function (res) {
             var rows = Agenda.filterAgenda(res[0], 'todo', Agenda.todayIso());
             var isOficina = res[1] === 'oficina';
+            var canRegister = !!res[1] && typeof openForm === 'function';
             container.innerHTML = '';
             if (rows.length === 0) return;
             var h = document.createElement('h3');
@@ -296,13 +301,21 @@
                     '  <span class="maint-upcoming-status">' + escapeHtml(info.text) + '</span>' +
                     '</div>' +
                     (extra ? '<div class="maint-upcoming-extra">' + escapeHtml(extra) + '</div>' : '');
+                if (canRegister) {
+                    var done = document.createElement('button');
+                    done.type = 'button';
+                    done.className = 'maint-btn maint-btn-primary maint-btn-small maint-btn-done';
+                    done.textContent = '✔ Hecho';
+                    done.addEventListener('click', function () { openForm(row.activity_id); });
+                    item.querySelector('.maint-upcoming-main').appendChild(done);
+                }
                 if (isOficina && row.status !== 'sin_fecha') {
                     var btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'maint-btn maint-btn-secondary maint-btn-small';
                     btn.textContent = row.status === 'sin_registro' ? 'Programar' : 'Reprogramar';
                     btn.addEventListener('click', function () {
-                        openRescheduleModal(client, row, function () { renderUpcoming(container, client, tagId); });
+                        openRescheduleModal(client, row, function () { renderUpcoming(container, client, tagId, openForm); });
                     });
                     item.querySelector('.maint-upcoming-main').appendChild(btn);
                 }
@@ -317,7 +330,7 @@
             retry.type = 'button';
             retry.className = 'maint-btn maint-btn-secondary';
             retry.textContent = 'Reintentar';
-            retry.addEventListener('click', function () { renderUpcoming(container, client, tagId); });
+            retry.addEventListener('click', function () { renderUpcoming(container, client, tagId, openForm); });
             box.appendChild(retry);
             container.appendChild(box);
         });
@@ -479,16 +492,28 @@
         var upcoming = document.createElement('section');
         upcoming.className = 'maint-upcoming';
         bodyContainer.appendChild(upcoming);
-        renderUpcoming(upcoming, client, tagId);
+        renderUpcoming(upcoming, client, tagId, openForm);
 
-        addBtn.addEventListener('click', function () {
-            // Se implementa en el Task 5 (renderNewRecordForm).
-            if (typeof renderNewRecordForm === 'function') {
-                renderNewRecordForm(formSlot, tagId, function () {
-                    loadAndRenderRecords(bodyContainer, tagId);
-                });
-            }
-        });
+        // Llegó desde "✔ Hecho" en Programados (?hecho=<actividad>): abrir el formulario
+        // apenas haya sesión (si no la hay, queda pendiente hasta que inicie sesión).
+        if (pendingDone !== null) {
+            client.auth.getSession().then(function (result) {
+                if (!(result.data && result.data.session) || pendingDone === null) return;
+                var activityId = pendingDone;
+                pendingDone = null;
+                openForm(activityId);
+            });
+        }
+
+        // Abre el formulario; con activityId esa actividad llega ya marcada (botón ✔ Hecho).
+        function openForm(activityId) {
+            renderNewRecordForm(formSlot, tagId, function () {
+                loadAndRenderRecords(bodyContainer, tagId);
+            }, activityId === undefined ? null : { activity_ids: activityId ? [activityId] : [] });
+            formSlot.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        addBtn.addEventListener('click', function () { openForm(); });
 
         if (records.length === 0) {
             var empty = document.createElement('p');
@@ -805,8 +830,12 @@
         });
     }
 
-    function renderNewRecordForm(container, tagId, onDone) {
+    function renderNewRecordForm(container, tagId, onDone, preset) {
         var draft = loadDraft(tagId) || {};
+        if (preset) {
+            draft.activity_ids = preset.activity_ids;
+            if (preset.activity_ids.length) draft.type = 'preventivo';
+        }
 
         container.innerHTML =
             '<form class="maint-form" id="maint-new-record-form">' +
@@ -1131,6 +1160,7 @@
 
         btnFicha.addEventListener('click', showFicha);
         btnHistorial.addEventListener('click', showHistorial);
+        if (pendingDone !== null) showHistorial();
     });
 
     // Inicio del sitio: franja de vencidos de toda la planta (diseño, "Si olvidan el aplicativo").
