@@ -78,7 +78,7 @@ Una fila por cada TAG con clase × cada actividad activa de esa clase:
 
 Reglas:
 
-1. **Ritmo real** del TAG: con la lectura más reciente (`hmi_hours` no nulo) y la lectura más antigua de los últimos 180 días que esté al menos 7 días antes, `rate = Δhoras / Δdías`, tope 24. Si la más reciente es **menor** que la anterior (reset del contador o cambio de PLC), no hay ritmo real.
+1. **Ritmo real** del TAG: con la lectura más reciente (`hmi_hours` no nulo) y la lectura más antigua dentro de los 180 días previos a esa lectura que esté al menos 7 días antes, `rate = Δhoras / Δdías`, tope 24. Si la más reciente es **menor** que la anterior (reset del contador o cambio de PLC), no hay ritmo real.
 2. **Ritmo estimado** (sin ritmo real): `normal` y `principal` → `hours_per_day` de la clase; `alterna` → `hours_per_day / n` (n = TAGs `alterna` con el mismo `group_key`); `reserva` → 0.
 3. **Fecha por horas** (si `interval_hours` y ritmo > 0):
    - si el registro base tiene `last_hmi_hours`: se parte de la **lectura más reciente del TAG** (de cualquier registro, incluido el base): `fecha_lectura_más_reciente + (due_hours − lectura_más_reciente) / ritmo`. Si esa lectura es menor que `last_hmi_hours` (reset), se usa la variante sin lectura;
