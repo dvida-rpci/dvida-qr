@@ -183,6 +183,20 @@ Ver [docs/superpowers/specs/2026-09-20-historico-mantenimientos-design.md](docs/
 - **Tests de este feature:** RLS `python3 -m pytest tests/supabase -v` (50 tests, requiere `supabase start`); lógica pura del feed `/home/administrador/.codegpt/bin/node --test tests/js/*.test.js` (Node 22: pasar el glob, no la carpeta); generador `python3 -m pytest tests/test_generator_feed.py`. Los tests de RLS dejan registros `TEST-*` en la base local y no se pueden borrar con `service_role` (el trigger de auditoría exige `changed_by`): borrar como usuario `oficina`.
 - **Verificación en navegador:** la skill browser-automation usa patchright, que evalúa en un mundo aislado: `page.evaluate` NO ve las variables `window` de la página (p. ej. `window.__TAG_INDEX__`); leer el DOM o el texto del `<script>`.
 
+## Plan de mantenimiento por sábana
+
+Ver [docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md](docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md). Fase 1 (base) hecha; fase 2 (ventana en `gui.py`) y fase 3 (sitio) pendientes.
+
+- **Se repite por planta:** la migración `20261014120000_maintenance_plan.sql` es genérica (sin datos). El conocimiento reutilizable vive en `sabana_base.xlsx` (hojas `Clases`, `Actividades`, `Instrucciones`); cada planta lo importa y ajusta sus frecuencias en su propio Supabase.
+- **Tablas:** `equipment_classes` (horas/día estimadas), `maintenance_activities` (cada X h y/o Y semanas, `active`), `equipment_tags` (TAG → clase, `group_key` del par A/B, `regime` normal/alterna/principal/reserva), `maintenance_record_activities` (varias por registro) y `maintenance_records.hmi_hours` (lectura opcional del HMI).
+- **Alta:** `rpc('create_maintenance_record', {p_record, p_activity_ids})` inserta registro + actividades en una transacción. Un trigger rechaza actividades inactivas o de otra clase que la del TAG.
+- **Cálculo (fuente única):** `maintenance_schedule_at(p_today)` / vista `maintenance_schedule`. Gana lo que ocurra primero (horas o semanas). Ritmo real con dos lecturas del HMI separadas ≥7 días (ventana 180 días, tope 24 h/día); si el contador bajó (reset) o no hay lecturas, usa el estimado: clase × régimen (`alterna` divide entre los `alterna` del mismo `group_key`, `reserva` = 0). Días truncados hacia abajo. Estados: `vencido`, `proximo` (≤14 días), `al_dia`, `sin_registro`, `sin_fecha`.
+- **RLS:** todo lectura pública; catálogo solo `oficina`; actividades de un registro las agrega su autor (u oficina) y solo oficina las quita.
+- **`maintenance_plan.py`** (puro, sin red): `load_library` (valida y reporta errores con hoja/fila), `plan_import` (merge por `code`, no pisa lo existente), `suggest_class` (letra del TAG + palabras clave en TIPO DE BOMBA/TIPO/SERVICIO/Título), `detect_pairs`, `load_plantilla_tags`, `export_library`.
+- **Planta nueva:** `./setup_supabase_planta.sh <project-ref>` (`supabase link` + `db push` + pasos manuales). **No usarlo en DVida**: su historial remoto no está sincronizado; ahí las migraciones van con `psql`.
+- **Tests:** `python3 -m pytest tests/supabase/test_maintenance_plan.py` (18, requiere `supabase start` y la migración aplicada en local) y `python3 -m pytest tests/test_maintenance_plan_lib.py` (10, sin red).
+- **Producción (`qgxvukllzuaiyhzegaef`):** la migración aún **no** está aplicada.
+
 ## Archivos generados por `excel_migrator.py`
 
 Bajo `<output_dir>/`:
@@ -269,6 +283,8 @@ Bajo `<output_dir>/`:
 | [gui_maintenance.py](gui_maintenance.py)                                 | ✅ Pantalla "Mantenimientos" en gui.py (Plan 3) — diálogo maximizado con login, selector de TAG, alta/edición/borrado según rol |
 | [maintenance.js](maintenance.js), [maintenance.css](maintenance.css)   | ✅ Histórico de mantenimientos (Plan 2) — cliente Supabase, login, lectura/carga de historial, fotos+audio, comentarios, re-login por sesión expirada |
 | [supabase/migrations/](supabase/migrations/)                             | ✅ Schema + RLS + triggers + Storage del histórico de mantenimientos (Plan 1)                                                                                       |
+| [maintenance_plan.py](maintenance_plan.py), [sabana_base.xlsx](sabana_base.xlsx) | ✅ Plan de mantenimiento fase 1 — lógica pura + biblioteca de sábanas (frecuencias de ejemplo, validar con fabricante) |
+| [setup_supabase_planta.sh](setup_supabase_planta.sh)                     | ✅ Aplica todas las migraciones a un proyecto Supabase nuevo (no usar en DVida) |
 | [tests/supabase/](tests/supabase/)                                       | ✅ Suite pytest de RLS (40 tests, incl. `test_hardening.py`) — requiere `supabase start` (Docker) corriendo localmente; correr con `python3 -m pytest tests/supabase -v`                        |
 | `NI00011 Fichas Técnicas_Equipos STARnD GROUP SEB V3.xlsx`               | ✅ Source xlsx actual en raíz                                                                                                                                       |
 | `docs/assets/images/`                                                    | ✅ 37 carpetas TAG con imágenes extraídas (filtro posición+frecuencia activo)                                                                                       |
