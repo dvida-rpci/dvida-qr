@@ -183,6 +183,10 @@ Cada fila muestra el TAG (con link a su ficha en el sitio), el servicio, la acti
 - `maintenance_record_activities.due_date date` (lo llena `create_maintenance_record` antes de insertar el registro; null si no había fecha).
 - `maintenance_agenda_at` agrega `original_due_date`, `reschedule_count`, `days_overdue`.
 
+## "✔ Hecho" (agregado 2026-10-14, pedido del usuario)
+
+Cada fila de **Programados** (`mantenimientos.html`) y de **"Próximos mantenimientos"** (ficha, visible con sesión) tiene un botón **"✔ Hecho"**. Abre el formulario de registro con esa actividad **ya marcada** (y tipo Preventivo); el técnico solo agrega descripción/horas y guarda. Desde Programados el enlace es `<ficha>?hecho=<activity_id>` (`''` = libre): la ficha abre el historial y, apenas hay sesión, el formulario. Al guardar: lo de la sábana **salta a su próxima fecha** (es recurrente) y lo manual/libre **desaparece** (queda cumplido); el registro aparece en Realizados.
+
 ## Biblioteca `sabana_base.xlsx` (raíz del repo, versionada)
 
 Conocimiento de RPCI reutilizable entre plantas.

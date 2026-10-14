@@ -65,6 +65,11 @@
         return entry.categoria.toLowerCase() + '/' + entry.filename;
     }
 
+    // Enlace "✔ Hecho" de Programados: abre la ficha con el formulario y la actividad marcada.
+    function doneHref(entry, activityId) {
+        return fichaHref(entry) + '?hecho=' + encodeURIComponent(activityId || '');
+    }
+
     function indexByTag(index) {
         var map = {};
         index.forEach(function (entry) { map[entry.tag] = entry; });
@@ -82,6 +87,7 @@
         mergeRecords: mergeRecords,
         stepIndex: stepIndex,
         fichaHref: fichaHref,
+        doneHref: doneHref,
         indexByTag: indexByTag
     };
 
@@ -341,6 +347,9 @@
                 '<span class="agenda-activity">' + escapeHtml(row.activity_name) + '</span>' +
                 '<span class="agenda-status">' + escapeHtml(info.text) + '</span>' + when +
                 (extra ? '<span class="agenda-extra">' + escapeHtml(extra) + '</span>' : '') +
+                (entry && row.status !== 'sin_fecha'
+                    ? '<a class="agenda-done" href="' + escapeHtml(doneHref(entry, row.activity_id)) + '">✔ Hecho</a>'
+                    : '') +
                 '</li>';
         }).join('');
         el.innerHTML = '<header class="feed-card-head">' + tagHtml + servicioHtml + '</header>' +

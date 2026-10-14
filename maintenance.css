@@ -440,3 +440,5 @@
 
 /* .maint-field fija display: sin esto el atributo hidden no oculta nada */
 .maint-field[hidden], .maint-activities[hidden] { display: none; }
+
+.maint-btn-done { margin-left: auto; }

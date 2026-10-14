@@ -93,3 +93,9 @@ test('fichaHref arma la ruta relativa a la raíz', () => {
 test('indexByTag indexa por TAG', () => {
     assert.equal(feed.indexByTag(INDEX)['100-TK-01'].categoria, 'TANQUES');
 });
+
+test('doneHref abre la ficha con la actividad para marcar como hecha', () => {
+    const entry = { categoria: 'EQUIPOS', filename: '200-P-01A.html' };
+    assert.equal(feed.doneHref(entry, 'abc-123'), 'equipos/200-P-01A.html?hecho=abc-123');
+    assert.equal(feed.doneHref(entry, null), 'equipos/200-P-01A.html?hecho=');
+});
