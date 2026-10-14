@@ -142,20 +142,45 @@ def format_date(iso: str | None) -> str:
     return date.fromisoformat(iso).strftime("%d/%m/%Y") if iso else "—"
 
 
-async def confirm_overwrite(tag_id: str, conflicts: list[dict], new_date: str) -> bool:
-    """Advertencia del spec: ya hay algo programado para ese TAG y actividad."""
-    with ui.dialog() as dialog, ui.card().classes("max-w-lg"):
+def conflict_text(tag_id: str, c: dict) -> str:
+    """Una línea de la advertencia de sobrescritura (markdown)."""
+    when = f"**{format_date(c['due_date'])}**"
+    if c.get("status") == "vencido" and c.get("days_overdue") is not None:
+        return (f"⚠️ **{tag_id} — {c['activity_name']}** estaba programado para el {when} "
+                f"y está **vencido hace {c['days_overdue']} días** "
+                f"({SOURCE_LABEL.get(c['source'], c['source'])}).")
+    return (f"⚠️ **{tag_id} — {c['activity_name']}** ya está programado para el {when} "
+            f"({SOURCE_LABEL.get(c['source'], c['source'])}).")
+
+
+async def confirm_overwrite(tag_id: str, conflicts: list[dict], new_date: str,
+                            ask_reason: bool = False, reason: str = ""):
+    """Advertencia del spec. Sin `ask_reason` devuelve bool. Con `ask_reason` devuelve el
+    motivo (str) o None si se cancela; el motivo es obligatorio si algo está vencido."""
+    overdue = any(c.get("status") == "vencido" for c in conflicts)
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-lg"):
         for c in conflicts:
-            ui.markdown(
-                f"⚠️ **{tag_id} — {c['activity_name']}** ya está programado para el "
-                f"**{format_date(c['due_date'])}** ({SOURCE_LABEL.get(c['source'], c['source'])})."
-            )
-        ui.markdown(f"¿Sobrescribir con el **{format_date(new_date)}**?")
+            ui.markdown(conflict_text(tag_id, c))
+        ui.markdown(f"¿{'Reprogramar' if overdue else 'Sobrescribir'} para el **{format_date(new_date)}**?")
+        reason_input = None
+        if ask_reason:
+            label = "Motivo (obligatorio: está vencido)" if overdue else "Motivo (opcional)"
+            reason_input = ui.input(label, value=reason or "").props("outlined dense").classes("w-full")
+        error = ui.label("").classes("text-red-600 text-sm")
+
+        def accept():
+            if reason_input is not None and overdue and not (reason_input.value or "").strip():
+                error.text = "Escribí el motivo de la reprogramación."
+                return
+            dialog.submit((reason_input.value or "").strip() if reason_input is not None else True)
+
         with ui.row().classes("w-full justify-end gap-2"):
-            ui.button("Cancelar", on_click=lambda: dialog.submit(False)).props("flat")
-            ui.button("Sobrescribir", on_click=lambda: dialog.submit(True)).props("color=orange")
+            ui.button("Cancelar", on_click=lambda: dialog.submit(None)).props("flat")
+            ui.button("Reprogramar" if overdue else "Sobrescribir", on_click=accept).props("color=orange")
     result = await dialog
     dialog.delete()
+    if ask_reason:
+        return result if isinstance(result, str) else None
     return bool(result)
 
 

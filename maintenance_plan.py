@@ -238,11 +238,12 @@ def export_library(classes: list[EquipmentClass], activities: list[Activity], pa
 AGENDA_FILTERS = {
     "semana": "Esta semana",
     "atrasados": "Atrasados",
+    "sin_historial": "Sin historial",
     "proxima": "Próxima semana",
     "4semanas": "Próximas 4 semanas",
     "todo": "Todo",
 }
-OVERDUE = ("vencido", "sin_registro")
+CRITICAL_DAYS = 30
 
 
 def week_bounds(today: date, offset_weeks: int = 0) -> tuple[date, date]:
@@ -252,18 +253,22 @@ def week_bounds(today: date, offset_weeks: int = 0) -> tuple[date, date]:
 
 
 def filter_agenda(rows: list[dict], mode: str, today: date) -> list[dict]:
-    """Filas de maintenance_agenda para un filtro rápido. Los atrasados (vencido o
-    sin registro) se incluyen en "semana", "4semanas" y "todo", siempre primero."""
+    """Filas de maintenance_agenda para un filtro rápido. Los vencidos van siempre primero
+    (más antiguos arriba) en "semana", "4semanas" y "todo". Los `sin_registro` no son
+    retrasos reales (equipo sin historial todavía): solo salen en "sin_historial" y "todo"."""
     def due(row):
         return date.fromisoformat(row["due_date"]) if row.get("due_date") else None
 
     def in_range(row, start, end):
         return due(row) is not None and start <= due(row) <= end
 
-    overdue = [r for r in rows if r["status"] in OVERDUE]
-    upcoming = [r for r in rows if r["status"] not in OVERDUE]
+    overdue = [r for r in rows if r["status"] == "vencido"]
+    no_history = [r for r in rows if r["status"] == "sin_registro"]
+    upcoming = [r for r in rows if r["status"] not in ("vencido", "sin_registro")]
     if mode == "atrasados":
         selected = overdue
+    elif mode == "sin_historial":
+        selected = no_history
     elif mode == "semana":
         start, end = week_bounds(today)
         selected = overdue + [r for r in upcoming if in_range(r, start, end)]
@@ -274,5 +279,17 @@ def filter_agenda(rows: list[dict], mode: str, today: date) -> list[dict]:
         selected = overdue + [r for r in upcoming if in_range(r, today, today + timedelta(days=27))]
     else:
         selected = list(rows)
+    rank = {"vencido": 0, "sin_registro": 2}
     return sorted(selected, key=lambda r: (
-        r["status"] not in OVERDUE, r["status"] == "sin_registro", due(r) or date.max, r["tag_id"]))
+        rank.get(r["status"], 1), due(r) or date.max, r["activity_name"] if "activity_name" in r else "",
+        r["tag_id"]))
+
+
+def agenda_summary(rows: list[dict]) -> dict:
+    """Conteos para el resumen: vencidos, críticos (≥ CRITICAL_DAYS) y sin historial."""
+    overdue = [r for r in rows if r["status"] == "vencido"]
+    return {
+        "vencidos": len(overdue),
+        "criticos": sum(1 for r in overdue if (r.get("days_overdue") or 0) >= CRITICAL_DAYS),
+        "sin_historial": sum(1 for r in rows if r["status"] == "sin_registro"),
+    }

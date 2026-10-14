@@ -7,6 +7,7 @@ from maintenance_plan import (
     EquipmentClass,
     LibraryError,
     detect_pairs,
+    agenda_summary,
     filter_agenda,
     week_bounds,
     export_library,
@@ -183,12 +184,23 @@ AGENDA = [
 
 
 @pytest.mark.parametrize("mode, tags", [
-    ("semana", ["D", "C", "B"]),
-    ("atrasados", ["D", "C"]),
+    ("semana", ["D", "B"]),
+    ("atrasados", ["D"]),
+    ("sin_historial", ["C"]),
     ("proxima", ["A"]),
-    ("4semanas", ["D", "C", "B", "A"]),
-    ("todo", ["D", "C", "B", "A", "E"]),
+    ("4semanas", ["D", "B", "A"]),
+    ("todo", ["D", "B", "A", "E", "C"]),
 ])
 def test_filter_agenda(mode, tags):
     from datetime import date
     assert [r["tag_id"] for r in filter_agenda(AGENDA, mode, date(2026, 10, 14))] == tags
+
+
+def test_agenda_summary():
+    rows = [
+        {"status": "vencido", "days_overdue": 45},
+        {"status": "vencido", "days_overdue": 3},
+        {"status": "sin_registro"},
+        {"status": "proximo"},
+    ]
+    assert agenda_summary(rows) == {"vencidos": 2, "criticos": 1, "sin_historial": 1}

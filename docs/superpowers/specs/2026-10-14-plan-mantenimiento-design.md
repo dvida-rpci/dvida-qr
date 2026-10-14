@@ -138,7 +138,7 @@ El campo "Próximo mantenimiento programado" del formulario de registro libre us
 
 La pestaña **Agenda** de la GUI y la pestaña **Programados** de `mantenimientos.html` leen `maintenance_agenda` y tienen filtros rápidos (por defecto **Esta semana**):
 
-- **Atrasados**: `status = vencido` y `sin_registro` (siempre arriba, en rojo).
+- **Atrasados**: `status = vencido` (siempre arriba, en rojo). `sin_registro` va en su propio filtro **Sin historial** (ver "Si la cola de atrasados crece mucho").
 - **Esta semana**: `due_date` de lunes a domingo de la semana actual (hora de Colombia).
 - **Próxima semana** y **Próximas 4 semanas**.
 - **Todo**.
@@ -165,6 +165,13 @@ Cada fila muestra el TAG (con link a su ficha en el sitio), el servicio, la acti
 - El manual nuevo guarda `previous_due_date`, `original_due_date` (la primera fecha de la cadena) y `reschedule_count` (cuántas veces se corrió desde el último mantenimiento hecho). El anterior queda `reemplazado`: nada se borra.
 - Mientras está reprogramado, la fila dice **"Reprogramado ×2 · fecha original 07/12/2026 · motivo: falta repuesto"** y su estado sale de la fecha nueva (no aparece como vencido hasta que esa también pase). Si vuelve a vencer: **"Vencido hace N días · reprogramado 2 veces"**.
 - Cuando por fin se registra, el atraso se mide contra la **fecha original**, no contra la última reprogramación: reprogramar no maquilla el cumplimiento.
+
+**Si la cola de atrasados crece mucho**
+- **"Sin historial" va aparte.** Al arrancar una planta *todas* las actividades salen `sin_registro` (DVida: 7 bombas × 3 = 21; una planta grande, cientos). No son retrasos reales, así que **no** entran en el contador de atrasados ni en "Esta semana": tienen su propio filtro **"Sin historial"**. En la GUI se seleccionan varias y **"Programar primera vez"** les pone fecha de una sola vez (`schedule_manual` por cada una; sin conflicto porque no tienen fecha).
+- **Prioridad por antigüedad:** vencidos ordenados de más a menos días; desde **30 días** se marcan **"‼️ crítico"**.
+- **Resumen arriba:** "🔴 12 vencidos (4 críticos) · ⚪ 21 sin historial".
+- **Agrupado por equipo en el sitio:** una tarjeta por TAG con sus actividades vencidas (no una por actividad) y "Mostrar más" de a 20 tarjetas, para que en el celular no sea una lista infinita.
+- **Reprogramar en lote (GUI):** se seleccionan varios vencidos y se reprograman a una fecha con **un solo motivo**; cada uno queda con su propia trazabilidad (`schedule_manual` por fila, con `p_replace`).
 
 **Datos (migración `20261016120000_overdue_tracking.sql`)**
 - `maintenance_manual_schedule`: `previous_due_date date`, `original_due_date date`, `reschedule_count int not null default 0`.

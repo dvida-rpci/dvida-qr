@@ -437,6 +437,23 @@ def build_plan_screen(content):
 
     # ── Programación ──────────────────────────────────────────────────────
 
+    def status_text(r: dict) -> str:
+        if r["status"] == "vencido":
+            days = r.get("days_overdue") or 0
+            text = f"🔴 Vencido hace {days} día{'s' if days != 1 else ''}"
+            return text + (" · ‼️ crítico" if days >= mp.CRITICAL_DAYS else "")
+        if r["status"] == "sin_registro":
+            return "⚪ Nunca registrado"
+        return STATUS_LABEL.get(r["status"], r["status"])
+
+    def reschedule_text(r: dict) -> str:
+        if not r.get("reschedule_count"):
+            return ""
+        text = f"Reprogramado ×{r['reschedule_count']}"
+        if r.get("original_due_date"):
+            text += f" · fecha original {format_date(r['original_due_date'])}"
+        return text + (f" · motivo: {r['note']}" if r.get("note") else "")
+
     def render_programacion(panel):
         panel.clear()
         try:
@@ -446,7 +463,11 @@ def build_plan_screen(content):
                              lambda: render_programacion(panel))
             return
         servicio = {r["TAG"]: r.get("SERVICIO") or "" for r in _plantilla_rows()}
+        summary = mp.agenda_summary(agenda)
+        selected: dict = {}  # (tag, activity_id) → fila, para acciones en lote
         with panel:
+            ui.label(f"🔴 {summary['vencidos']} vencidos ({summary['criticos']} críticos) · "
+                     f"⚪ {summary['sin_historial']} sin historial").classes("font-semibold")
             with ui.row().classes("items-center gap-2 w-full"):
                 mode = ui.select(mp.AGENDA_FILTERS, value="semana", label="Ver").props(
                     "outlined dense").classes("w-full sm:w-52")
@@ -455,12 +476,26 @@ def build_plan_screen(content):
                 ui.button("+ Programar manual",
                           on_click=lambda: schedule_dialog(panel)).props("color=primary")
                 ui.button(icon="refresh", on_click=lambda: render_programacion(panel)).props("flat")
+            bulk_btn = ui.button("Programar seleccionados", on_click=lambda: bulk_dialog(
+                panel, list(selected.values()))).props("color=orange")
+            bulk_btn.set_visibility(False)
             monday, sunday = mp.week_bounds(date.today())
             ui.label(f"Semana actual: {format_date(monday.isoformat())} – "
                      f"{format_date(sunday.isoformat())}").classes("text-xs text-gray-500")
             listing = ui.column().classes("w-full gap-1")
 
+        def toggle(row, value):
+            key = (row["tag_id"], row["activity_id"])
+            if value:
+                selected[key] = row
+            else:
+                selected.pop(key, None)
+            bulk_btn.text = f"Programar seleccionados ({len(selected)})"
+            bulk_btn.set_visibility(bool(selected))
+
         def draw():
+            selected.clear()
+            bulk_btn.set_visibility(False)
             text = mp.normalize(search.value)
             rows = [r for r in mp.filter_agenda(agenda, mode.value, date.today())
                     if not text or text in mp.normalize(r["tag_id"] + " " + servicio.get(r["tag_id"], ""))]
@@ -470,9 +505,12 @@ def build_plan_screen(content):
                     ui.label("No hay mantenimientos programados para este filtro.").classes("text-gray-500")
                 for r in rows:
                     # Dos líneas que se acomodan solas: se lee igual en PC y en celular.
+                    color = "text-red-700" if r["status"] == "vencido" else ""
                     with ui.column().classes("w-full gap-0 border-b py-2"):
                         with ui.row().classes("items-center gap-x-3 gap-y-0 w-full"):
-                            ui.label(STATUS_LABEL.get(r["status"], r["status"])).classes("text-sm")
+                            if r["status"] in ("vencido", "sin_registro"):
+                                ui.checkbox(on_change=lambda e, r=r: toggle(r, e.value)).props("dense")
+                            ui.label(status_text(r)).classes(f"text-sm {color}")
                             ui.label(format_date(r["due_date"])).classes("font-semibold")
                             ui.label(r["tag_id"]).classes("font-mono text-sm")
                             ui.label(r["source"]).classes("text-xs px-2 rounded-full bg-gray-100")
@@ -486,6 +524,9 @@ def build_plan_screen(content):
                             if r["source"] == "manual":
                                 ui.button("Cancelar", on_click=lambda r=r: cancel_manual(panel, r)).props(
                                     "flat dense no-caps color=red")
+                        extra = reschedule_text(r)
+                        if extra:
+                            ui.label(extra).classes("text-xs text-amber-700")
 
         mode.on_value_change(lambda _: draw())
         search.on_value_change(lambda _: draw())
@@ -495,6 +536,47 @@ def build_plan_screen(content):
         if update_row("maintenance_manual_schedule", "id", row["manual_id"], {"status": "cancelado"},
                       ok="Programación manual cancelada"):
             render_programacion(panel)
+
+    def bulk_dialog(panel, rows):
+        """Programar/reprogramar varias filas a una fecha con un solo motivo (cada una
+        queda con su trazabilidad: una llamada a schedule_manual por fila)."""
+        overdue = any(r["status"] == "vencido" for r in rows)
+        with ui.dialog() as dialog, ui.card().classes("w-full max-w-md"):
+            ui.label(f"Programar {len(rows)} mantenimientos").classes("text-lg font-semibold")
+            for r in rows[:8]:
+                ui.label(f"• {r['tag_id']} — {r['activity_name']}").classes("text-sm")
+            if len(rows) > 8:
+                ui.label(f"… y {len(rows) - 8} más").classes("text-sm text-gray-500")
+            date_in = ui.input("Fecha", value=(date.today() + timedelta(days=7)).isoformat()).props(
+                "outlined dense type=date").classes("w-full")
+            reason = ui.input("Motivo (obligatorio: hay vencidos)" if overdue else "Motivo (opcional)").props(
+                "outlined dense").classes("w-full")
+
+            def apply():
+                if overdue and not (reason.value or "").strip():
+                    ui.notify("Escribí el motivo: hay mantenimientos vencidos.", type="warning")
+                    return
+                errors = []
+                for r in rows:
+                    try:
+                        client.rpc("schedule_manual", {
+                            "p_tag": r["tag_id"], "p_activity": r["activity_id"], "p_date": date_in.value,
+                            "p_note": (reason.value or "").strip() or None, "p_replace": True,
+                        }).execute()
+                    except Exception as e:
+                        errors.append(f"{r['tag_id']}: {friendly_error(e)}")
+                dialog.close()
+                if errors:
+                    ui.notify(f"{len(rows) - len(errors)} programados; fallaron: " + "; ".join(errors),
+                              type="warning", multi_line=True, close_button=True, timeout=0)
+                else:
+                    ui.notify(f"{len(rows)} mantenimientos programados", type="positive")
+                render_programacion(panel)
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Cancelar", on_click=dialog.close).props("flat")
+                ui.button("Programar", on_click=apply).props("color=primary")
+        dialog.open()
 
     def schedule_dialog(panel, tag=None, activity_id=None):
         tags = [r["TAG"] for r in _plantilla_rows()]
@@ -506,7 +588,7 @@ def build_plan_screen(content):
                                 label="Actividad").props("outlined dense").classes("w-full")
             default_date = (date.today() + timedelta(days=7)).isoformat()
             date_in = ui.input("Fecha", value=default_date).props("outlined dense type=date").classes("w-full")
-            note = ui.input("Nota (opcional)").props("outlined dense").classes("w-full")
+            note = ui.input("Nota / motivo (opcional)").props("outlined dense").classes("w-full")
 
             def load_activities(preselect=None):
                 options = {LIBRE: "Libre (fuera de la sábana)"}
@@ -529,9 +611,11 @@ def build_plan_screen(content):
                 try:
                     result = client.rpc("schedule_manual", params).execute().data
                     if result["status"] == "conflict":
-                        if not await confirm_overwrite(tag_sel.value, result["conflicts"], date_in.value):
+                        reason = await confirm_overwrite(tag_sel.value, result["conflicts"], date_in.value,
+                                                         ask_reason=True, reason=note.value or "")
+                        if reason is None:
                             return
-                        params["p_replace"] = True
+                        params.update({"p_replace": True, "p_note": reason or None})
                         result = client.rpc("schedule_manual", params).execute().data
                 except Exception as e:
                     ui.notify(f"No se pudo programar: {friendly_error(e)}", type="negative")
