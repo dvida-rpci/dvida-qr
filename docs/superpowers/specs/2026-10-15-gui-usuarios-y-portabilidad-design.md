@@ -1,6 +1,6 @@
 # GUI: administración de usuarios y fácil de correr en cualquier laptop — diseño
 
-Fecha: 2026-10-15 · Estado: **diseño, sin implementar**
+Fecha: 2026-10-15 · Estado: **diseño aprobado, sin implementar**
 
 ## Propósito
 
@@ -71,7 +71,7 @@ Botón propio en `gui.py` (diálogo maximizado, mismo patrón que 📋 Plan). Re
 
 ### Requisitos
 
-- Windows 10/11 (principal), macOS y Linux.
+- Windows 10/11 (principal), macOS (casos excepcionales) y Linux (RPCI).
 - **Sin instalar Python a mano y, de ser posible, sin permisos de administrador** (laptops corporativos).
 - **Un doble clic** para abrir; el navegador se abre solo en la GUI.
 - Actualizar sin reinstalar.
@@ -81,7 +81,7 @@ Botón propio en `gui.py` (diálogo maximizado, mismo patrón que 📋 Plan). Re
 
 [`uv`](https://docs.astral.sh/uv/) es un binario único que instala Python aislado y las dependencias exactas, sin admin y en segundos.
 
-1. **`Instalar_QR_PTAR.bat`** (Windows) / **`instalar.sh`** (macOS/Linux), en la raíz del repo:
+1. **`Instalar_QR_PTAR.bat`** (Windows), **`Instalar_QR_PTAR.command`** (Mac, ver abajo) e **`instalar.sh`** (Linux), en la raíz del repo:
    - Descarga `uv` en el perfil del usuario (sin admin).
    - `uv sync` instala Python 3.12 + dependencias con versiones fijas (`pyproject.toml` + `uv.lock`, reemplazan a `requirements.txt` para la GUI).
    - Crea el acceso directo **"QR PTAR"** en escritorio y menú Inicio (en macOS/Linux, el equivalente).
@@ -119,11 +119,18 @@ Diagnóstico de un vistazo: versión de la app, Git instalado, conexión a Supab
 ## Fases (un plan por fase)
 
 1. **Usuarios:** migración (`active`, `is_member/is_oficina`, `user_admin_log`), Edge Function, pantalla 👥 Usuarios, "Cambiar mi contraseña" (GUI y sitio), despliegue en `setup_supabase_planta.sh`.
-2. **Instalador:** `pyproject.toml` + `uv.lock`, `Instalar_QR_PTAR.bat` / `instalar.sh`, acceso directo, "Buscar actualización".
+2. **Instalador:** `pyproject.toml` + `uv.lock`, `Instalar_QR_PTAR.bat` (Windows), `Instalar_QR_PTAR.command` (Mac), `instalar.sh` (Linux), acceso directo, "Buscar actualización".
 3. **Primer uso y publicación:** asistente de configuración, "🚀 Publicar sitio", pantalla 🩺 Estado.
 
-## Preguntas abiertas
+## Decisiones del usuario (2026-10-15)
 
-1. ¿Los laptops de las plantas tienen Windows con o sin permisos de administrador? (El diseño asume *sin*.)
-2. ¿Quién publica el sitio en cada planta? Necesita una cuenta de GitHub con permiso sobre el repo de esa planta.
-3. ¿Hace falta macOS, o basta Windows (y Linux para RPCI)?
+1. **Las plantas usan Windows; Mac solo en casos excepcionales.** El instalador apunta primero a Windows y se mantiene el supuesto **sin permisos de administrador** (no está garantizado en laptops corporativos).
+2. **En cada planta tienen permiso sobre la cuenta de GitHub** de su repo: "🚀 Publicar sitio" lo hace el mismo personal de planta desde la GUI.
+3. **Mac también hace falta.**
+
+### Mac (casos excepcionales)
+
+- **`Instalar_QR_PTAR.command`**: un `.command` se abre con doble clic desde Finder (corre en Terminal). Hace lo mismo que el `.bat`: descarga `uv` en el perfil del usuario, `uv sync`, y crea en el Escritorio el lanzador **"QR PTAR.command"** que corre `uv run gui.py` y abre el navegador.
+- **Gatekeeper:** un archivo descargado sin firmar queda en cuarentena. La primera vez: clic derecho → **Abrir** → Abrir (una sola vez). Si el repo se clona con Git no hay cuarentena. Firmar/notarizar con cuenta de Apple Developer queda fuera de alcance mientras sean casos excepcionales.
+- **Git en Mac:** si no está, macOS ofrece instalar las *Command Line Tools* la primera vez que se usa `git`. La pantalla 🩺 Estado lo detecta y lo explica.
+- **Pruebas:** instalador en un Mac con usuario estándar (sin admin), de cero a GUI abierta.
