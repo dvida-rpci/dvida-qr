@@ -143,6 +143,16 @@
     // Lógica pura en maintenance_agenda.js (window.MaintAgenda).
 
     var Agenda = window.MaintAgenda;
+    var HISTORY_PAGE = 10;  // Realizados se pide de a 10 ("Cargar más"): con miles de registros no se baja todo
+    var OPEN_ITEMS = 3;     // del 4.º en adelante las filas van plegadas (chevron)
+
+    // <details> nativo con chevron: plegado muestra lo esencial, abierto el detalle y los botones.
+    function foldable(className, open) {
+        var el = document.createElement('details');
+        el.className = className + ' maint-fold';
+        el.open = !!open;
+        return el;
+    }
     // Actividad pedida con ?registrar= en la URL ('' = mantenimiento libre); null = nada pendiente.
     var pendingDone = typeof window !== 'undefined' && window.location
         ? new URLSearchParams(window.location.search).get('registrar')
@@ -315,17 +325,19 @@
                     : noPlanNotice(tagId));
                 return;
             }
-            rows.forEach(function (row) {
+            rows.forEach(function (row, i) {
                 var info = Agenda.statusInfo(row);
-                var item = document.createElement('div');
-                item.className = 'maint-upcoming-item maint-level-' + info.level;
+                var item = foldable('maint-upcoming-item maint-level-' + info.level, i < OPEN_ITEMS);
                 var extra = Agenda.rescheduleText(row);
                 item.innerHTML =
-                    '<div class="maint-upcoming-main">' +
+                    '<summary class="maint-fold-summary">' +
                     '  <span class="maint-upcoming-activity">' + escapeHtml(row.activity_name) + '</span>' +
                     '  <span class="maint-upcoming-status">' + escapeHtml(info.text) + '</span>' +
-                    '</div>' +
-                    (extra ? '<div class="maint-upcoming-extra">' + escapeHtml(extra) + '</div>' : '');
+                    '</summary>' +
+                    '<div class="maint-fold-body">' +
+                    (extra ? '<div class="maint-upcoming-extra">' + escapeHtml(extra) + '</div>' : '') +
+                    '<div class="maint-upcoming-main"></div>' +
+                    '</div>';
                 if (canRegister) {
                     var done = document.createElement('button');
                     done.type = 'button';
@@ -522,9 +534,8 @@
         return wrapper;
     }
 
-    function renderRecord(client, record, onChange) {
-        var el = document.createElement('article');
-        el.className = 'maint-record';
+    function renderRecord(client, record, onChange, open) {
+        var el = foldable('maint-record', open);
 
         var badge = record.is_date_anomaly
             ? '<span class="maint-badge-anomaly" title="La fecha de carga difiere más de 2 días de la fecha declarada del mantenimiento">⚠️ revisar fecha</span>'
@@ -538,31 +549,39 @@
             ? '<p class="maint-record-next"><strong>Próximo programado:</strong> ' + formatDate(record.next_scheduled_at) + '</p>'
             : '';
 
-        var activitiesHtml = (record.maintenance_record_activities || [])
-            .filter(function (link) { return link.maintenance_activities; })
-            .map(function (link) {
-                var delay = Agenda.delayText(link.due_date, record.performed_at);
-                var late = delay && delay !== 'A tiempo';
-                return '<li class="maint-done-activity">✅ ' + escapeHtml(link.maintenance_activities.name) +
-                    (delay ? ' <span class="maint-delay' + (late ? ' maint-delay-late' : '') + '">' + delay + '</span>' : '') +
-                    '</li>';
-            }).join('');
+        var links = (record.maintenance_record_activities || []).filter(function (link) { return link.maintenance_activities; });
+        var activitiesHtml = links.map(function (link) {
+            var delay = Agenda.delayText(link.due_date, record.performed_at);
+            var late = delay && delay !== 'A tiempo';
+            return '<li class="maint-done-activity">✅ ' + escapeHtml(link.maintenance_activities.name) +
+                (delay ? ' <span class="maint-delay' + (late ? ' maint-delay-late' : '') + '">' + delay + '</span>' : '') +
+                '</li>';
+        }).join('');
         var hmiHtml = record.hmi_hours != null
             ? '<p class="maint-record-hmi"><strong>Horas HMI:</strong> ' + Number(record.hmi_hours).toLocaleString('es-CO') + ' h</p>'
             : '';
+        // Lo esencial cuando está plegado: qué se hizo (actividades o descripción) en una línea.
+        var essential = links.length
+            ? '✅ ' + links.map(function (l) { return l.maintenance_activities.name; }).join(' · ')
+            : record.description;
 
         el.innerHTML =
-            '<header class="maint-record-head">' +
-            '  <span class="maint-record-date">' + formatDate(record.performed_at) + '</span>' +
-            '  <span class="maint-record-type">' + (record.type === 'preventivo' ? 'Preventivo' : 'Correctivo') + '</span>' +
+            '<summary class="maint-fold-summary">' +
+            '  <span class="maint-record-head">' +
+            '    <span class="maint-record-date">' + formatDate(record.performed_at) + '</span>' +
+            '    <span class="maint-record-type">' + (record.type === 'preventivo' ? 'Preventivo' : 'Correctivo') + '</span>' +
             badge +
-            '</header>' +
+            '  </span>' +
+            '  <span class="maint-fold-line">' + escapeHtml(essential) + '</span>' +
+            '</summary>' +
+            '<div class="maint-fold-body">' +
             (activitiesHtml ? '<ul class="maint-done-activities">' + activitiesHtml + '</ul>' : '') +
             '<p class="maint-record-description">' + escapeHtml(record.description) + '</p>' +
             hmiHtml + partsHtml + nextHtml +
             '<div class="maint-record-comments"></div>' +
             '<div class="maint-record-attachments"></div>' +
-            '<div class="maint-record-add"></div>';
+            '<div class="maint-record-add"></div>' +
+            '</div>';
 
         var commentsBox = el.querySelector('.maint-record-comments');
         (record.maintenance_comments || [])
@@ -575,10 +594,18 @@
                 commentsBox.appendChild(p);
             });
 
+        // Fotos/audio (URLs firmadas) solo cuando la fila se abre: plegada no consulta nada.
         var attachmentsBox = el.querySelector('.maint-record-attachments');
-        (record.maintenance_attachments || []).forEach(function (attachment) {
-            attachmentsBox.appendChild(renderAttachment(client, attachment));
-        });
+        var mediaLoaded = false;
+        function loadMedia() {
+            if (mediaLoaded || !el.open) return;
+            mediaLoaded = true;
+            (record.maintenance_attachments || []).forEach(function (attachment) {
+                attachmentsBox.appendChild(renderAttachment(client, attachment));
+            });
+        }
+        el.addEventListener('toggle', loadMedia);
+        loadMedia();
 
         // Solo el autor del evento puede sumarle comentarios/adjuntos desde el sitio
         // (oficina edita/borra desde gui.py, Plan 3).
@@ -600,26 +627,38 @@
         return el;
     }
 
+    var RECORD_SELECT = '*, maintenance_comments(*), maintenance_attachments(*), ' +
+        'maintenance_record_activities(due_date, maintenance_activities(name))';
+
+    // Una página de Realizados (más recientes primero) + el total real para la pestaña.
+    function fetchRecordsPage(client, tagId, offset) {
+        return client
+            .from('maintenance_records')
+            .select(RECORD_SELECT, { count: 'exact' })
+            .eq('tag_id', tagId)
+            .order('performed_at', { ascending: false })
+            .order('created_at', { ascending: false })
+            .range(offset, offset + HISTORY_PAGE - 1)
+            .then(function (result) {
+                if (result.error) throw result.error;
+                return { rows: result.data, total: result.count == null ? result.data.length : result.count };
+            });
+    }
+
     function loadAndRenderRecords(bodyContainer, tagId) {
         bodyContainer.innerHTML = '<p class="maint-loading">Cargando historial…</p>';
         var client = getClient();
 
-        client
-            .from('maintenance_records')
-            .select('*, maintenance_comments(*), maintenance_attachments(*), ' +
-                'maintenance_record_activities(due_date, maintenance_activities(name))')
-            .eq('tag_id', tagId)
-            .order('performed_at', { ascending: false })
-            .then(function (result) {
-                if (result.error) throw result.error;
-                renderHistorialBody(bodyContainer, tagId, client, result.data);
+        fetchRecordsPage(client, tagId, 0)
+            .then(function (page) {
+                renderHistorialBody(bodyContainer, tagId, client, page.rows, page.total);
             })
             .catch(function (err) {
                 renderError(bodyContainer, 'No se pudo cargar el historial: ' + err.message);
             });
     }
 
-    function renderHistorialBody(bodyContainer, tagId, client, records) {
+    function renderHistorialBody(bodyContainer, tagId, client, records, total) {
         bodyContainer.innerHTML = '';
 
         var addBtn = document.createElement('button');
@@ -642,7 +681,7 @@
             { key: 'plan', label: 'Plan' }
         ]);
         tabs.select('programados');
-        tabs.setCount('realizados', records.length, false);
+        tabs.setCount('realizados', total, false);
         renderUpcoming(tabs.panels.programados, client, tagId, openForm, function (n, overdue) {
             tabs.setCount('programados', n, overdue > 0);
         });
@@ -676,12 +715,40 @@
 
         var list = document.createElement('div');
         list.className = 'maint-list';
-        records.forEach(function (record) {
-            list.appendChild(renderRecord(client, record, function () {
-                loadAndRenderRecords(bodyContainer, tagId);
-            }));
-        });
         tabs.panels.realizados.appendChild(list);
+        var shown = 0;
+        function reload() { loadAndRenderRecords(bodyContainer, tagId); }
+        function append(rows) {
+            rows.forEach(function (record) {
+                list.appendChild(renderRecord(client, record, reload, shown < OPEN_ITEMS));
+                shown += 1;
+            });
+        }
+        append(records);
+
+        // "Cargar más": las siguientes 10 desde la base (nunca se baja el historial completo).
+        var more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'maint-btn maint-btn-secondary maint-load-more';
+        tabs.panels.realizados.appendChild(more);
+        function syncMore() {
+            more.hidden = shown >= total;
+            more.textContent = 'Cargar más (' + (total - shown) + ' restantes)';
+        }
+        more.addEventListener('click', function () {
+            more.disabled = true;
+            more.textContent = 'Cargando…';
+            fetchRecordsPage(client, tagId, shown).then(function (page) {
+                append(page.rows);
+                total = page.total;
+                more.disabled = false;
+                syncMore();
+            }).catch(function (err) {
+                more.disabled = false;
+                more.textContent = 'No se pudo cargar: ' + err.message + ' — reintentar';
+            });
+        });
+        syncMore();
     }
 
     // ── Carga de mantenimientos (Task 5) ─────────────────────────────────

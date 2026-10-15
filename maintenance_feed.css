@@ -348,3 +348,8 @@ a.feed-card-tag:hover {
 }
 
 .agenda-activity { overflow-wrap: anywhere; }
+
+/* Tarjetas plegables (chevron): la cabecera vive dentro del <summary> */
+.feed-card > summary .feed-card-head,
+.feed-card > summary .feed-card-meta { flex: 1 1 100%; min-width: 0; }
+.feed-card > summary .feed-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }

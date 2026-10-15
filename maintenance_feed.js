@@ -258,9 +258,17 @@
 
     // ── Tarjeta de un mantenimiento ──────────────────────────────────────
 
-    function renderCard(record, entry, openViewer) {
-        var el = document.createElement('article');
-        el.className = 'maint-record feed-card';
+    var OPEN_ITEMS = 3;  // del 4.º en adelante las tarjetas van plegadas (chevron)
+
+    function foldable(className, open) {
+        var el = document.createElement('details');
+        el.className = className + ' maint-fold';
+        el.open = !!open;
+        return el;
+    }
+
+    function renderCard(record, entry, openViewer, open) {
+        var el = foldable('maint-record feed-card', open);
 
         var tagHtml = entry
             ? '<a class="feed-card-tag" href="' + escapeHtml(fichaHref(entry)) + '">' + escapeHtml(record.tag_id) + '</a>'
@@ -279,16 +287,21 @@
             : '';
 
         el.innerHTML =
-            '<header class="feed-card-head">' + tagHtml + servicioHtml + '</header>' +
-            '<div class="feed-card-meta">' +
+            '<summary class="maint-fold-summary">' +
+            '<span class="feed-card-head">' + tagHtml + servicioHtml + '</span>' +
+            '<span class="feed-card-meta">' +
             '  <span class="maint-record-date">' + formatDate(record.performed_at) + '</span>' +
             '  <span class="maint-record-type">' + (record.type === 'preventivo' ? 'Preventivo' : 'Correctivo') + '</span>' +
             badge +
-            '</div>' +
+            '</span>' +
+            '<span class="maint-fold-line">' + escapeHtml(record.description) + '</span>' +
+            '</summary>' +
+            '<div class="maint-fold-body">' +
             '<p class="maint-record-description">' + escapeHtml(record.description) + '</p>' +
             partsHtml + nextHtml +
             '<p class="feed-card-author">Registrado por ' + escapeHtml(record.author_name) + '</p>' +
-            '<div class="feed-card-media"></div>';
+            '<div class="feed-card-media"></div>' +
+            '</div>';
 
         var media = el.querySelector('.feed-card-media');
         var playable = record.attachments.filter(function (a) { return !!a.url; });
@@ -328,10 +341,9 @@
 
     var AGENDA_PAGE = 20;
 
-    function renderAgendaCard(group, entry) {
+    function renderAgendaCard(group, entry, open) {
         var A = window.MaintAgenda;
-        var el = document.createElement('article');
-        el.className = 'maint-record feed-card agenda-card';
+        var el = foldable('maint-record feed-card agenda-card', open);
         var tagHtml = entry
             ? '<a class="feed-card-tag" href="' + escapeHtml(fichaHref(entry)) + '">' + escapeHtml(group.tag) + '</a>'
             : '<span class="feed-card-tag">' + escapeHtml(group.tag) + '</span>';
@@ -352,8 +364,15 @@
                     : '') +
                 '</li>';
         }).join('');
-        el.innerHTML = '<header class="feed-card-head">' + tagHtml + servicioHtml + '</header>' +
-            '<ul class="agenda-items">' + items + '</ul>';
+        // Plegada: cuántas actividades y cuántas vencidas, en una línea.
+        var sum = A.summary(group.rows);
+        var line = group.rows.length + (group.rows.length === 1 ? ' actividad' : ' actividades') +
+            (sum.vencidos ? ' · 🔴 ' + sum.vencidos + (sum.vencidos === 1 ? ' vencida' : ' vencidas') : '');
+        el.innerHTML = '<summary class="maint-fold-summary">' +
+            '<span class="feed-card-head">' + tagHtml + servicioHtml + '</span>' +
+            '<span class="maint-fold-line">' + escapeHtml(line) + '</span>' +
+            '</summary>' +
+            '<div class="maint-fold-body"><ul class="agenda-items">' + items + '</ul></div>';
         return el;
     }
 
@@ -468,8 +487,8 @@
                     moreBtn.hidden = true;
                     return;
                 }
-                groups.slice(state.offset, state.offset + AGENDA_PAGE).forEach(function (group) {
-                    listEl.appendChild(renderAgendaCard(group, byTag[group.tag]));
+                groups.slice(state.offset, state.offset + AGENDA_PAGE).forEach(function (group, i) {
+                    listEl.appendChild(renderAgendaCard(group, byTag[group.tag], state.offset + i < OPEN_ITEMS));
                 });
                 state.offset += AGENDA_PAGE;
                 moreBtn.hidden = state.offset >= groups.length;
@@ -513,8 +532,8 @@
                         showEmpty();
                         return;
                     }
-                    page.records.forEach(function (record) {
-                        listEl.appendChild(renderCard(record, byTag[record.tag_id], viewer.open));
+                    page.records.forEach(function (record, i) {
+                        listEl.appendChild(renderCard(record, byTag[record.tag_id], viewer.open, state.offset + i < OPEN_ITEMS));
                     });
                     state.offset += PAGE_SIZE;
                     moreBtn.hidden = !page.hasMore;

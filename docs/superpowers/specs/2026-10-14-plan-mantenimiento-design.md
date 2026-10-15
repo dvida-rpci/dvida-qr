@@ -199,6 +199,8 @@ Cada TAG (equipo, instrumento o tanque) muestra en su vista de mantenimiento tre
 
 Avisos si están vacías: sin clase asignada → "<TAG> todavía no tiene plan de mantenimiento (sábana). Oficina se lo asigna en la GUI → 📋 Plan de mantenimiento → Equipos." (Programados y Plan); sin registros → "Todavía no hay mantenimientos registrados para <TAG>."; con clase pero nada programado → "No hay mantenimientos programados para <TAG>."; clase sin actividades → aviso en Plan.
 
+**Listas largas (pedido del usuario):** Realizados se pide a la base **de a 10** con **"Cargar más (N restantes)"** (`range` + `count: exact` para el contador real); lo mismo en 🧰 Mantenimientos de la GUI y en `mantenimientos.html`. **Del 4.º elemento en adelante cada fila va plegada con chevron** (`<details>` en el sitio, `ui.expansion` en la GUI): plegada muestra lo esencial (fecha, tipo, actividades o descripción, estado) y al abrir el detalle y los botones. Fotos/audio de una fila plegada no se piden hasta abrirla.
+
 Pestañas accesibles (`role=tablist`, flechas del teclado). En celular: 3 columnas iguales, contador debajo del nombre y letra `clamp(0.78rem, 3.4vw, 0.95rem)` para que los nombres quepan completos desde 320 px.
 
 ## Biblioteca `sabana_base.xlsx` (raíz del repo, versionada)

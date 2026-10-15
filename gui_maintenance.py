@@ -31,6 +31,8 @@ REPO_ROOT = Path(__file__).parent
 SITE_CONFIG = REPO_ROOT / "site_config.json"
 
 MAX_ATTACHMENTS = 5
+HISTORY_PAGE = 10  # historial de a 10 ("Cargar más"): con miles de registros no se baja todo
+OPEN_ITEMS = 3     # del 4.º en adelante los registros van plegados (chevron)
 BUCKET = "maintenance-attachments"
 MAX_FILE_BYTES = 10 * 1024 * 1024  # mismo tope que el bucket (migración de endurecimiento)
 # Audios que acepta el bucket; el sitio (maintenance.js) graba webm/mp4/ogg.
@@ -402,21 +404,29 @@ def build_maintenance_screen(content):
                 tags, label="TAG", with_input=True, on_change=on_tag_change
             ).props("outlined dense").classes("w-full max-w-xs")
 
+    def fetch_records_page(tag_id: str, offset: int):
+        """Una página del historial (más recientes primero) + el total real."""
+        result = (
+            client.table("maintenance_records")
+            .select(
+                "*, maintenance_comments(*), maintenance_attachments(*), "
+                "maintenance_record_activities(activity_id, maintenance_activities(name))",
+                count="exact",
+            )
+            .eq("tag_id", tag_id)
+            .order("performed_at", desc=True)
+            .order("created_at", desc=True)
+            .range(offset, offset + HISTORY_PAGE - 1)
+            .execute()
+        )
+        return result.data, (result.count if result.count is not None else len(result.data))
+
     def render_records(container, tag_id: str):
         container.clear()
         with container:
             ui.label("Cargando…").classes("text-gray-500")
         try:
-            result = (
-                client.table("maintenance_records")
-                .select(
-                    "*, maintenance_comments(*), maintenance_attachments(*), "
-                    "maintenance_record_activities(activity_id, maintenance_activities(name))"
-                )
-                .eq("tag_id", tag_id)
-                .order("performed_at", desc=True)
-                .execute()
-            )
+            rows, total = fetch_records_page(tag_id, 0)
         except Exception as e:
             container.clear()
             with container:
@@ -435,73 +445,96 @@ def build_maintenance_screen(content):
                 "+ Registrar mantenimiento",
                 on_click=lambda: open_new_record_dialog(tag_id, container),
             ).props("color=primary")
-            if not result.data:
+            if not rows:
                 ui.label("Todavía no hay mantenimientos registrados para este TAG.").classes(
                     "text-gray-500"
                 )
-            for record in result.data:
-                render_record_card(container, record, tag_id)
+            ui.label(f"{total} mantenimientos registrados").classes("text-sm text-gray-500")
+            listing = ui.column().classes("w-full gap-3")
+            more_row = ui.row().classes("w-full")
+        shown = {"n": 0, "total": total}
 
-    def render_record_card(container, record: dict, tag_id: str):
-        with container:
-            with ui.card().classes("w-full"):
-                with ui.row().classes("items-center gap-2"):
+        def append(page_rows):
+            for record in page_rows:
+                render_record_card(listing, record, tag_id, container, shown["n"] < OPEN_ITEMS)
+                shown["n"] += 1
+            more_row.clear()
+            if shown["n"] < shown["total"]:
+                with more_row:
+                    ui.button(f"Cargar más ({shown['total'] - shown['n']} restantes)",
+                              on_click=load_more).props("outline").classes("w-full")
+
+        def load_more():
+            try:
+                page_rows, shown["total"] = fetch_records_page(tag_id, shown["n"])
+            except Exception as e:
+                ui.notify(f"No se pudo cargar: {friendly_error(e)}", type="negative")
+                return
+            append(page_rows)
+
+        append(rows)
+
+    def render_record_card(listing, record: dict, tag_id: str, container, open_: bool = True):
+        """Tarjeta de un registro. Del 4.º en adelante va plegada (chevron) con lo esencial
+        en el encabezado; detalle y botones al abrir."""
+        done = [
+            link["maintenance_activities"]["name"]
+            for link in record.get("maintenance_record_activities", [])
+            if link.get("maintenance_activities")
+        ]
+        essential = ("✅ " + " · ".join(done)) if done else record["description"]
+        with listing:
+            if open_:
+                card = ui.card().classes("w-full")
+                with card, ui.row().classes("items-center gap-2"):
                     ui.label(record["performed_at"]).classes("font-bold")
                     ui.label(record["type"]).classes(
                         "text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
                     )
                     if record.get("is_date_anomaly"):
                         ui.label("⚠️ revisar fecha").classes("text-red-600 text-xs font-semibold")
-                ui.label(record["description"])
-                done = [
-                    link["maintenance_activities"]["name"]
-                    for link in record.get("maintenance_record_activities", [])
-                    if link.get("maintenance_activities")
-                ]
-                if done:
-                    ui.label("✅ " + " · ".join(done)).classes("text-sm text-green-700")
-                if record.get("hmi_hours") is not None:
-                    ui.label(f"Horas HMI: {record['hmi_hours']:g} h").classes("text-sm text-gray-600")
-                if record.get("parts_used"):
-                    ui.label(f"Repuestos: {record['parts_used']}").classes(
-                        "text-sm text-gray-600"
-                    )
-                if record.get("next_scheduled_at"):
-                    ui.label(f"Próximo programado: {record['next_scheduled_at']}").classes(
-                        "text-sm text-gray-600"
-                    )
-                comments = sorted(
-                    record.get("maintenance_comments", []), key=lambda c: c["created_at"]
+                body = card
+            else:
+                title = f"{record['performed_at']} · {record['type']} — {essential[:70]}"
+                body = ui.expansion(title).classes("w-full border rounded")
+        with body:
+            ui.label(record["description"])
+            if done:
+                ui.label("✅ " + " · ".join(done)).classes("text-sm text-green-700")
+            if record.get("hmi_hours") is not None:
+                ui.label(f"Horas HMI: {record['hmi_hours']:g} h").classes("text-sm text-gray-600")
+            if record.get("parts_used"):
+                ui.label(f"Repuestos: {record['parts_used']}").classes("text-sm text-gray-600")
+            if record.get("next_scheduled_at"):
+                ui.label(f"Próximo programado: {record['next_scheduled_at']}").classes(
+                    "text-sm text-gray-600"
                 )
-                for comment in comments:
-                    ui.label(comment["body"]).classes(
-                        "text-sm bg-gray-50 rounded px-2 py-1 mt-1"
-                    )
-                attachments = record.get("maintenance_attachments", [])
-                if attachments:
-                    with ui.row().classes("gap-2 mt-2 flex-wrap"):
-                        for attachment in attachments:
-                            ui.label(
-                                f"📎 {attachment['kind']} ({attachment['storage_path'].split('/')[-1]})"
-                            ).classes("text-xs bg-gray-100 rounded px-2 py-1")
-                with ui.row().classes("gap-2 mt-2"):
-                    is_owner = record["created_by"] == session_state["user"].id
-                    is_oficina = session_state["role"] == "oficina"
-                    if is_owner or is_oficina:
-                        ui.button(
-                            "+ Comentario/adjunto",
-                            on_click=lambda r=record: open_add_comment_dialog(r, tag_id, container),
-                        ).props("flat dense")
-                    if is_oficina:
-                        ui.button(
-                            "Editar",
-                            on_click=lambda r=record: open_edit_dialog(r, tag_id, container),
-                        ).props("flat dense")
-                        ui.button(
-                            "Borrar",
-                            on_click=lambda r=record: confirm_delete(r, tag_id, container),
-                        ).props("flat dense color=red")
-
+            for comment in sorted(record.get("maintenance_comments", []), key=lambda c: c["created_at"]):
+                ui.label(comment["body"]).classes("text-sm bg-gray-50 rounded px-2 py-1 mt-1")
+            attachments = record.get("maintenance_attachments", [])
+            if attachments:
+                with ui.row().classes("gap-2 mt-2 flex-wrap"):
+                    for attachment in attachments:
+                        ui.label(
+                            f"📎 {attachment['kind']} ({attachment['storage_path'].split('/')[-1]})"
+                        ).classes("text-xs bg-gray-100 rounded px-2 py-1")
+            with ui.row().classes("gap-2 mt-2"):
+                is_owner = record["created_by"] == session_state["user"].id
+                is_oficina = session_state["role"] == "oficina"
+                if is_owner or is_oficina:
+                    ui.button(
+                        "+ Comentario/adjunto",
+                        on_click=lambda r=record: open_add_comment_dialog(r, tag_id, container),
+                    ).props("flat dense")
+                if is_oficina:
+                    ui.button(
+                        "Editar",
+                        on_click=lambda r=record: open_edit_dialog(r, tag_id, container),
+                    ).props("flat dense")
+                    ui.button(
+                        "Borrar",
+                        on_click=lambda r=record: confirm_delete(r, tag_id, container),
+                    ).props("flat dense color=red")
 
     def _finish(dialog, container, tag_id: str, errors: list[str], ok_msg: str):
         """Cierra el diálogo y recarga la lista. Si algún adjunto falló NO se deja reintentar

@@ -600,7 +600,7 @@ def render_maintenance_page(items: list[Item]) -> str:
         '</div>',
         '</div>',
         '<div class="feed-list" id="feed-list" aria-live="polite"></div>',
-        '<div class="feed-more"><button type="button" class="maint-btn maint-btn-secondary" id="feed-more" hidden>Mostrar más</button></div>',
+        '<div class="feed-more"><button type="button" class="maint-btn maint-btn-secondary" id="feed-more" hidden>Cargar más</button></div>',
         f'<script>window.__TAG_INDEX__ = {index_json};</script>',
     ])
 
