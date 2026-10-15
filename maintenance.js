@@ -277,19 +277,44 @@
         });
     }
 
-    // Bloque "Próximos mantenimientos" de la ficha (lectura pública).
-    function renderUpcoming(container, client, tagId, openForm) {
+    function noPlanNotice(tagId) {
+        return tagId + ' todavía no tiene plan de mantenimiento (sábana). Oficina se lo asigna en la GUI → ' +
+            '📋 Plan de mantenimiento → Equipos.';
+    }
+
+    function fetchTagClass(client, tagId) {
+        return client.from('equipment_tags')
+            .select('regime, group_key, equipment_classes(name, hours_per_day)')
+            .eq('tag_id', tagId)
+            .then(function (r) {
+                if (r.error) throw r.error;
+                var row = r.data[0];
+                return row && row.equipment_classes ? row : null;
+            });
+    }
+
+    function emptyNotice(container, text) {
+        var p = document.createElement('p');
+        p.className = 'maint-empty';
+        p.textContent = text;
+        container.appendChild(p);
+    }
+
+    // Pestaña "Programados" de la ficha (lectura pública). onCount(n) actualiza la pestaña.
+    function renderUpcoming(container, client, tagId, openForm, onCount) {
         container.innerHTML = '<p class="maint-loading">Cargando programación…</p>';
-        Promise.all([fetchAgenda(client, tagId), fetchRole(client)]).then(function (res) {
+        Promise.all([fetchAgenda(client, tagId), fetchRole(client), fetchTagClass(client, tagId)]).then(function (res) {
             var rows = Agenda.filterAgenda(res[0], 'todo', Agenda.todayIso());
             var isOficina = res[1] === 'oficina';
             var canRegister = !!res[1] && typeof openForm === 'function';
             container.innerHTML = '';
-            if (rows.length === 0) return;
-            var h = document.createElement('h3');
-            h.className = 'maint-upcoming-title';
-            h.textContent = 'Próximos mantenimientos';
-            container.appendChild(h);
+            if (onCount) onCount(rows.length, Agenda.summary(rows).vencidos);
+            if (rows.length === 0) {
+                emptyNotice(container, res[2]
+                    ? 'No hay mantenimientos programados para ' + tagId + '.'
+                    : noPlanNotice(tagId));
+                return;
+            }
             rows.forEach(function (row) {
                 var info = Agenda.statusInfo(row);
                 var item = document.createElement('div');
@@ -315,7 +340,7 @@
                     btn.className = 'maint-btn maint-btn-secondary maint-btn-small';
                     btn.textContent = row.status === 'sin_registro' ? 'Programar' : 'Reprogramar';
                     btn.addEventListener('click', function () {
-                        openRescheduleModal(client, row, function () { renderUpcoming(container, client, tagId, openForm); });
+                        openRescheduleModal(client, row, function () { renderUpcoming(container, client, tagId, openForm, onCount); });
                     });
                     item.querySelector('.maint-upcoming-main').appendChild(btn);
                 }
@@ -330,10 +355,132 @@
             retry.type = 'button';
             retry.className = 'maint-btn maint-btn-secondary';
             retry.textContent = 'Reintentar';
-            retry.addEventListener('click', function () { renderUpcoming(container, client, tagId, openForm); });
+            retry.addEventListener('click', function () { renderUpcoming(container, client, tagId, openForm, onCount); });
             box.appendChild(retry);
             container.appendChild(box);
         });
+    }
+
+    var REGIME_TEXT = {
+        normal: 'Opera solo',
+        alterna: 'Alterna con su par',
+        principal: 'Principal (su par queda de reserva)',
+        reserva: 'Reserva (entra si falla la principal)'
+    };
+
+    // Pestaña "Plan": qué mantenimiento lleva este TAG según la sábana y cómo se calcula.
+    function renderPlan(container, client, tagId) {
+        container.innerHTML = '<p class="maint-loading">Cargando plan…</p>';
+        Promise.all([
+            fetchTagClass(client, tagId),
+            fetchTagActivities(client, tagId),
+            client.from('maintenance_schedule').select('rate_hours_per_day, rate_source, last_hmi_hours')
+                .eq('tag_id', tagId).limit(1)
+        ]).then(function (res) {
+            var cls = res[0];
+            var activities = res[1];
+            var rate = res[2].data && res[2].data[0];
+            container.innerHTML = '';
+            if (!cls) {
+                emptyNotice(container, noPlanNotice(tagId));
+                return;
+            }
+            var head = document.createElement('div');
+            head.className = 'maint-plan-head';
+            var rateText = rate && rate.rate_hours_per_day != null
+                ? Number(rate.rate_hours_per_day).toLocaleString('es-CO') + ' h/día (' +
+                    (rate.rate_source === 'real' ? 'real, según lecturas del HMI' : 'estimado') + ')'
+                : Number(cls.equipment_classes.hours_per_day).toLocaleString('es-CO') + ' h/día (estimado)';
+            head.innerHTML =
+                '<p><strong>Clase:</strong> ' + escapeHtml(cls.equipment_classes.name) + '</p>' +
+                '<p><strong>Operación:</strong> ' + escapeHtml(REGIME_TEXT[cls.regime] || cls.regime) +
+                (cls.group_key ? ' · par ' + escapeHtml(cls.group_key) : '') + '</p>' +
+                '<p><strong>Ritmo:</strong> ' + escapeHtml(rateText) + '</p>';
+            container.appendChild(head);
+            if (!activities.length) {
+                emptyNotice(container, 'La clase de ' + tagId + ' todavía no tiene actividades en la sábana.');
+                return;
+            }
+            var list = document.createElement('ul');
+            list.className = 'maint-plan-list';
+            activities.forEach(function (a) {
+                var freq = [a.interval_hours ? Number(a.interval_hours).toLocaleString('es-CO') + ' h' : '',
+                    a.interval_weeks ? a.interval_weeks + ' semanas' : ''].filter(Boolean).join(' o ');
+                var li = document.createElement('li');
+                li.innerHTML = '<span class="maint-plan-activity">' + escapeHtml(a.name) + '</span>' +
+                    '<span class="maint-plan-freq">cada ' + escapeHtml(freq) +
+                    (a.interval_hours && a.interval_weeks ? ' (lo que ocurra primero)' : '') + '</span>';
+                list.appendChild(li);
+            });
+            container.appendChild(list);
+        }).catch(function (err) {
+            container.innerHTML = '';
+            var box = document.createElement('div');
+            box.className = 'maint-error';
+            box.textContent = 'No se pudo cargar el plan: ' + err.message + ' ';
+            var retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'maint-btn maint-btn-secondary';
+            retry.textContent = 'Reintentar';
+            retry.addEventListener('click', function () { renderPlan(container, client, tagId); });
+            box.appendChild(retry);
+            container.appendChild(box);
+        });
+    }
+
+    // Pestañas Programados · Realizados · Plan (role=tablist, flechas del teclado).
+    function buildTabs(container, defs) {
+        var bar = document.createElement('div');
+        bar.className = 'maint-tabs';
+        bar.setAttribute('role', 'tablist');
+        bar.setAttribute('aria-label', 'Mantenimiento');
+        container.appendChild(bar);
+        var api = { tabs: {}, panels: {} };
+        defs.forEach(function (d) {
+            var tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'maint-tab';
+            tab.id = 'maint-tab-' + d.key;
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-controls', 'maint-panel-' + d.key);
+            tab.innerHTML = '<span class="maint-tab-label">' + d.label + '</span><span class="maint-tab-count"></span>';
+            bar.appendChild(tab);
+            var panel = document.createElement('section');
+            panel.className = 'maint-tab-panel';
+            panel.id = 'maint-panel-' + d.key;
+            panel.setAttribute('role', 'tabpanel');
+            panel.setAttribute('aria-labelledby', tab.id);
+            container.appendChild(panel);
+            api.tabs[d.key] = tab;
+            api.panels[d.key] = panel;
+        });
+        var keys = defs.map(function (d) { return d.key; });
+        api.select = function (key) {
+            keys.forEach(function (k) {
+                var on = k === key;
+                api.tabs[k].classList.toggle('active', on);
+                api.tabs[k].setAttribute('aria-selected', on ? 'true' : 'false');
+                api.tabs[k].tabIndex = on ? 0 : -1;
+                api.panels[k].hidden = !on;
+            });
+        };
+        api.setCount = function (key, n, alert) {
+            var badge = api.tabs[key].querySelector('.maint-tab-count');
+            badge.textContent = n ? String(n) : '';
+            badge.classList.toggle('maint-tab-count-alert', !!alert);
+        };
+        keys.forEach(function (k, i) {
+            api.tabs[k].addEventListener('click', function () { api.select(k); });
+            api.tabs[k].addEventListener('keydown', function (evt) {
+                var delta = evt.key === 'ArrowRight' ? 1 : evt.key === 'ArrowLeft' ? -1 : 0;
+                if (!delta) return;
+                evt.preventDefault();
+                var next = keys[(i + delta + keys.length) % keys.length];
+                api.tabs[next].focus();
+                api.select(next);
+            });
+        });
+        return api;
     }
 
     // El bucket es privado: no se puede usar getPublicUrl() para servir el archivo
@@ -489,10 +636,17 @@
         formSlot.className = 'maint-form-slot';
         bodyContainer.appendChild(formSlot);
 
-        var upcoming = document.createElement('section');
-        upcoming.className = 'maint-upcoming';
-        bodyContainer.appendChild(upcoming);
-        renderUpcoming(upcoming, client, tagId, openForm);
+        var tabs = buildTabs(bodyContainer, [
+            { key: 'programados', label: 'Programados' },
+            { key: 'realizados', label: 'Realizados' },
+            { key: 'plan', label: 'Plan' }
+        ]);
+        tabs.select('programados');
+        tabs.setCount('realizados', records.length, false);
+        renderUpcoming(tabs.panels.programados, client, tagId, openForm, function (n, overdue) {
+            tabs.setCount('programados', n, overdue > 0);
+        });
+        renderPlan(tabs.panels.plan, client, tagId);
 
         // Llegó desde "📝 Registrar" en Programados (?registrar=<actividad>): abrir el formulario
         // apenas haya sesión (si no la hay, queda pendiente hasta que inicie sesión).
@@ -516,10 +670,7 @@
         addBtn.addEventListener('click', function () { openForm(); });
 
         if (records.length === 0) {
-            var empty = document.createElement('p');
-            empty.className = 'maint-empty';
-            empty.textContent = 'Todavía no hay mantenimientos registrados para este equipo.';
-            bodyContainer.appendChild(empty);
+            emptyNotice(tabs.panels.realizados, 'Todavía no hay mantenimientos registrados para ' + tagId + '.');
             return;
         }
 
@@ -530,7 +681,7 @@
                 loadAndRenderRecords(bodyContainer, tagId);
             }));
         });
-        bodyContainer.appendChild(list);
+        tabs.panels.realizados.appendChild(list);
     }
 
     // ── Carga de mantenimientos (Task 5) ─────────────────────────────────

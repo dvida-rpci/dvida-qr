@@ -189,6 +189,18 @@ Se llamó primero "✔ Hecho"; el usuario lo cambió porque el check verde da a 
 
 Cada fila de **Programados** (`mantenimientos.html`) y de **"Próximos mantenimientos"** (ficha, visible con sesión) tiene un botón **"📝 Registrar"**. Abre el formulario de registro con esa actividad **ya marcada** (y tipo Preventivo); el técnico solo agrega descripción/horas y guarda. Desde Programados el enlace es `<ficha>?registrar=<activity_id>` (`''` = libre): la ficha abre el historial y, apenas hay sesión, el formulario. Al guardar: lo de la sábana **salta a su próxima fecha** (es recurrente) y lo manual/libre **desaparece** (queda cumplido); el registro aparece en Realizados.
 
+## Pestañas de la ficha: Programados · Realizados · Plan (agregado 2026-10-15, pedido del usuario)
+
+Cada TAG (equipo, instrumento o tanque) muestra en su vista de mantenimiento tres pestañas, debajo del botón "+ Registrar mantenimiento":
+
+- **Programados** (por defecto): lo de `maintenance_agenda` para ese TAG, vencidos primero, con 📝 Registrar / Reprogramar. Contador en la pestaña, **rojo si hay vencidos**.
+- **Realizados**: el historial (lo que antes era la lista única), con contador.
+- **Plan** (propuesta aceptada): qué mantenimiento lleva el TAG según la sábana: clase, operación (régimen y par), ritmo usado (real por lecturas del HMI o estimado) y cada actividad con su frecuencia ("cada 1.300 h o 12 semanas, lo que ocurra primero").
+
+Avisos si están vacías: sin clase asignada → "<TAG> todavía no tiene plan de mantenimiento (sábana). Oficina se lo asigna en la GUI → 📋 Plan de mantenimiento → Equipos." (Programados y Plan); sin registros → "Todavía no hay mantenimientos registrados para <TAG>."; con clase pero nada programado → "No hay mantenimientos programados para <TAG>."; clase sin actividades → aviso en Plan.
+
+Pestañas accesibles (`role=tablist`, flechas del teclado). En celular: 3 columnas iguales, contador debajo del nombre y letra `clamp(0.78rem, 3.4vw, 0.95rem)` para que los nombres quepan completos desde 320 px.
+
 ## Biblioteca `sabana_base.xlsx` (raíz del repo, versionada)
 
 Conocimiento de RPCI reutilizable entre plantas.
