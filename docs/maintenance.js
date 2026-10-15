@@ -143,9 +143,9 @@
     // Lógica pura en maintenance_agenda.js (window.MaintAgenda).
 
     var Agenda = window.MaintAgenda;
-    // Actividad pedida con ?hecho= en la URL ('' = mantenimiento libre); null = nada pendiente.
+    // Actividad pedida con ?registrar= en la URL ('' = mantenimiento libre); null = nada pendiente.
     var pendingDone = typeof window !== 'undefined' && window.location
-        ? new URLSearchParams(window.location.search).get('hecho')
+        ? new URLSearchParams(window.location.search).get('registrar')
         : null;
 
     function fetchAgenda(client, tagId) {
@@ -305,7 +305,7 @@
                     var done = document.createElement('button');
                     done.type = 'button';
                     done.className = 'maint-btn maint-btn-primary maint-btn-small maint-btn-done';
-                    done.textContent = '✔ Hecho';
+                    done.textContent = '📝 Registrar';
                     done.addEventListener('click', function () { openForm(row.activity_id); });
                     item.querySelector('.maint-upcoming-main').appendChild(done);
                 }
@@ -494,7 +494,7 @@
         bodyContainer.appendChild(upcoming);
         renderUpcoming(upcoming, client, tagId, openForm);
 
-        // Llegó desde "✔ Hecho" en Programados (?hecho=<actividad>): abrir el formulario
+        // Llegó desde "📝 Registrar" en Programados (?registrar=<actividad>): abrir el formulario
         // apenas haya sesión (si no la hay, queda pendiente hasta que inicie sesión).
         if (pendingDone !== null) {
             client.auth.getSession().then(function (result) {
@@ -505,7 +505,7 @@
             });
         }
 
-        // Abre el formulario; con activityId esa actividad llega ya marcada (botón ✔ Hecho).
+        // Abre el formulario; con activityId esa actividad llega ya marcada (botón 📝 Registrar).
         function openForm(activityId) {
             renderNewRecordForm(formSlot, tagId, function () {
                 loadAndRenderRecords(bodyContainer, tagId);

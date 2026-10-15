@@ -65,9 +65,9 @@
         return entry.categoria.toLowerCase() + '/' + entry.filename;
     }
 
-    // Enlace "✔ Hecho" de Programados: abre la ficha con el formulario y la actividad marcada.
+    // Enlace "📝 Registrar" de Programados: abre la ficha con el formulario y la actividad marcada.
     function doneHref(entry, activityId) {
-        return fichaHref(entry) + '?hecho=' + encodeURIComponent(activityId || '');
+        return fichaHref(entry) + '?registrar=' + encodeURIComponent(activityId || '');
     }
 
     function indexByTag(index) {
@@ -348,7 +348,7 @@
                 '<span class="agenda-status">' + escapeHtml(info.text) + '</span>' + when +
                 (extra ? '<span class="agenda-extra">' + escapeHtml(extra) + '</span>' : '') +
                 (entry && row.status !== 'sin_fecha'
-                    ? '<a class="agenda-done" href="' + escapeHtml(doneHref(entry, row.activity_id)) + '">✔ Hecho</a>'
+                    ? '<a class="agenda-done" href="' + escapeHtml(doneHref(entry, row.activity_id)) + '">📝 Registrar</a>'
                     : '') +
                 '</li>';
         }).join('');
