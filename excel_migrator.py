@@ -1500,6 +1500,9 @@ body.lightbox-open { overflow: hidden; }
 /* ---------------- Mobile (<= 900px) ---------------- */
 @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; min-height: calc(100vh - var(--banner-h-mobile)); }
+    /* En grilla un hijo no se achica por debajo de su contenido mínimo: sin esto el
+       formulario de mantenimiento empuja 2 px de scroll horizontal a 360 px */
+    .content { min-width: 0; }
 
     .banner {
         height: var(--banner-h-mobile);
