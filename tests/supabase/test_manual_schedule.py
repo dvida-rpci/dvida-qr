@@ -101,3 +101,34 @@ def test_actividad_de_otra_clase_se_rechaza(service_client, oficina_client, plan
     }).execute().data[0]["id"]
     with pytest.raises(APIError, match="no corresponde"):
         _schedule(oficina_client, tag, other, IN_20)
+
+
+def test_etiquetas_dicen_que_hay_que_hacer(service_client, tecnico_client, oficina_client, plan):
+    tag = _tag(service_client, plan)
+    tecnico_client.table("maintenance_records").insert({
+        "tag_id": tag, "performed_at": TODAY.isoformat(), "type": "correctivo",
+        "description": "Cambio de difusores del reactor", "next_scheduled_at": IN_30,
+    }).execute()
+    row = [r for r in _agenda(oficina_client, tag) if r["source"] == "registro"][0]
+    assert row["activity_name"] == "Off-plan · Cambio de difusores del reactor"
+
+    _schedule(oficina_client, tag, None, IN_20, replace=True, note="Revisar fuga en brida")
+    row = [r for r in _agenda(oficina_client, tag) if r["source"] == "manual"][0]
+    assert row["activity_name"] == "Off-plan · Revisar fuga en brida"
+
+
+def test_manual_sin_nota_es_off_plan(service_client, oficina_client, plan):
+    tag = _tag(service_client, plan)
+    _schedule(oficina_client, tag, None, IN_20)
+    row = [r for r in _agenda(oficina_client, tag) if r["source"] == "manual"][0]
+    assert row["activity_name"] == "Off-plan"
+
+
+def test_descripcion_larga_se_recorta(service_client, tecnico_client, oficina_client, plan):
+    tag = _tag(service_client, plan)
+    tecnico_client.table("maintenance_records").insert({
+        "tag_id": tag, "performed_at": TODAY.isoformat(), "type": "correctivo",
+        "description": "x" * 80, "next_scheduled_at": IN_30,
+    }).execute()
+    row = [r for r in _agenda(oficina_client, tag) if r["source"] == "registro"][0]
+    assert row["activity_name"] == "Off-plan · " + "x" * 60 + "…"

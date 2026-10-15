@@ -44,7 +44,7 @@ STATUS_LABEL = {
     "sin_fecha": "— Sin fecha",
 }
 NO_CLASS = ""  # NiceGUI no maneja bien None como clave de opciones
-LIBRE = ""
+FUERA_DEL_PLAN = ""  # programación sin actividad de la sábana
 
 
 def open_plan_dialog():
@@ -594,20 +594,20 @@ def build_plan_screen(content):
             ui.label("Programar mantenimiento").classes("text-lg font-semibold")
             tag_sel = ui.select(tags, value=tag, label="TAG", with_input=True).props(
                 "outlined dense").classes("w-full")
-            act_sel = ui.select({LIBRE: "Libre (fuera de la sábana)"}, value=LIBRE,
+            act_sel = ui.select({FUERA_DEL_PLAN: "Off-plan (fuera de la sábana; describilo en la nota)"}, value=FUERA_DEL_PLAN,
                                 label="Actividad").props("outlined dense").classes("w-full")
             default_date = (date.today() + timedelta(days=7)).isoformat()
             date_in = ui.input("Fecha", value=default_date).props("outlined dense type=date").classes("w-full")
-            note = ui.input("Nota / motivo (opcional)").props("outlined dense").classes("w-full")
+            note = ui.input("Qué hay que hacer / motivo (opcional)").props("outlined dense").classes("w-full")
 
             def load_activities(preselect=None):
-                options = {LIBRE: "Libre (fuera de la sábana)"}
+                options = {FUERA_DEL_PLAN: "Off-plan (fuera de la sábana; describilo en la nota)"}
                 if tag_sel.value:
                     try:
                         options.update({a["id"]: a["name"] for a in fetch_tag_activities(client, tag_sel.value)})
                     except Exception as e:
                         ui.notify(f"No se pudo leer la sábana: {friendly_error(e)}", type="negative")
-                act_sel.set_options(options, value=preselect if preselect in options else LIBRE)
+                act_sel.set_options(options, value=preselect if preselect in options else FUERA_DEL_PLAN)
 
             tag_sel.on_value_change(lambda _: load_activities())
             load_activities(activity_id)

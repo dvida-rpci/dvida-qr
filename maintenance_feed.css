@@ -346,3 +346,5 @@ a.feed-card-tag:hover {
     font-weight: 700;
     text-decoration: none;
 }
+
+.agenda-activity { overflow-wrap: anywhere; }

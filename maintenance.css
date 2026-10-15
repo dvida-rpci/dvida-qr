@@ -497,3 +497,5 @@
 }
 .maint-plan-activity { font-weight: 600; flex: 1 1 100%; }
 .maint-plan-freq { font-size: 0.9rem; color: var(--text-muted); }
+
+.maint-upcoming-activity { overflow-wrap: anywhere; }

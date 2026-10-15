@@ -116,7 +116,7 @@ Une las tres fuentes de "lo que está programado", con columna `source`:
 | `manual` | `maintenance_manual_schedule` pendiente y no cumplido | — |
 | `registro` | `next_scheduled_at` del último registro libre del TAG (el campo que ya existe en el formulario) | Solo si no hay un registro posterior del mismo TAG |
 
-Columnas: `tag_id`, `activity_id`, `activity_name` ("Libre" si no tiene), `due_date`, `status` (mismos estados), `source`, `manual_id`, `note`.
+Columnas: `tag_id`, `activity_id`, `activity_name` (sin actividad: **"Off-plan · <descripción del registro o nota>"**, o solo "Off-plan"; antes decía "Libre", el usuario pidió algo más sugestivo, corto y en inglés — migración `20261017120000_agenda_labels.sql`), `due_date`, `status` (mismos estados), `source`, `manual_id`, `note`.
 
 ### Advertencia y sobrescritura (lado servidor)
 
