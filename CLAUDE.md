@@ -206,6 +206,10 @@ Ver [docs/superpowers/specs/2026-10-14-plan-mantenimiento-design.md](docs/superp
 - **Probar el sitio contra Supabase local:** generar a una carpeta temporal, reemplazar en los HTML la URL/anon key de producción por las de `.env.test` y servir con `python3 -m http.server`.
 - **Producción (`qgxvukllzuaiyhzegaef`):** ninguna de las tres migraciones del plan está aplicada todavía.
 
+## GUI: usuarios y portabilidad (diseño, sin implementar)
+
+Ver [docs/superpowers/specs/2026-10-15-gui-usuarios-y-portabilidad-design.md](docs/superpowers/specs/2026-10-15-gui-usuarios-y-portabilidad-design.md): pantalla 👥 Usuarios para oficina vía Edge Function `admin-users` (la `service_role` nunca sale de Supabase), desactivar en vez de borrar, "Cambiar mi contraseña"; instalador con `uv` (un doble clic, sin admin), asistente de primer uso y "🚀 Publicar sitio" sin terminal. Hoy los usuarios se siguen creando en Supabase → Authentication + `insert` en `profiles`.
+
 ## Archivos generados por `excel_migrator.py`
 
 Bajo `<output_dir>/`:
